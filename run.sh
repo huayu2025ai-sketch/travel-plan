@@ -4,7 +4,6 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PID_FILE="$ROOT_DIR/.run.pid"
-LOG_FILE="$ROOT_DIR/.run.log"
 APP_PORT="${APP_PORT:-3000}"
 
 usage() {
@@ -21,7 +20,7 @@ is_running() {
 }
 
 port_pid() {
-  lsof -tiTCP:"$APP_PORT" -sTCP:LISTEN 2>/dev/null | head -n 1
+  lsof -tiTCP:"$APP_PORT" -sTCP:LISTEN 2>/dev/null | head -n 1 || true
 }
 
 start() {
@@ -39,9 +38,8 @@ start() {
   fi
 
   cd "$ROOT_DIR"
-  nohup npm run dev >"$LOG_FILE" 2>&1 &
-  echo "$!" >"$PID_FILE"
-  echo "Started with PID $(cat "$PID_FILE"). Logs: $LOG_FILE"
+  echo "Starting on port $APP_PORT. Press Ctrl+C to stop."
+  exec npm run dev
 }
 
 stop() {
@@ -76,12 +74,12 @@ stop() {
 
 status() {
   if is_running; then
-    echo "Running with PID $(cat "$PID_FILE"). Logs: $LOG_FILE"
+    echo "Running with PID $(cat "$PID_FILE") on port $APP_PORT."
   elif [[ -n "$(port_pid)" ]]; then
     local existing_pid
     existing_pid="$(port_pid)"
     echo "$existing_pid" >"$PID_FILE"
-    echo "Running on port $APP_PORT with PID $existing_pid. Logs: $LOG_FILE"
+    echo "Running on port $APP_PORT with PID $existing_pid."
   else
     rm -f "$PID_FILE"
     echo "Not running."
