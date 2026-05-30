@@ -591,7 +591,14 @@ function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ idea: trimmedIdea }),
       });
-      const data = await response.json();
+      const responseText = await response.text();
+      let data;
+
+      try {
+        data = JSON.parse(responseText);
+      } catch {
+        throw new Error(`接口没有返回 JSON，请检查部署的 /api/generate 路由。返回内容：${responseText.slice(0, 80)}`);
+      }
 
       if (!response.ok) {
         throw new Error(data.error || '生成失败，请稍后重试。');
