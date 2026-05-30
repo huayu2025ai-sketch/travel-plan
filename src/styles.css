@@ -10,6 +10,11 @@ body {
   margin: 0;
   min-width: 320px;
   background: #f5f1e8;
+  transition: background-color 0.3s ease;
+}
+
+.dark body {
+  background: #141210;
 }
 
 button,
@@ -27,6 +32,15 @@ textarea {
   background-size: 34px 34px, 34px 34px, 100% 100%, 100% 100%, 100% 100%;
 }
 
+.dark .map-grid {
+  background-image:
+    linear-gradient(rgba(200, 180, 150, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(200, 180, 150, 0.04) 1px, transparent 1px),
+    radial-gradient(circle at 20% 20%, rgba(56, 189, 248, 0.06), transparent 34%),
+    radial-gradient(circle at 80% 10%, rgba(251, 191, 36, 0.07), transparent 28%),
+    radial-gradient(circle at 50% 80%, rgba(52, 211, 153, 0.06), transparent 30%);
+}
+
 ::-webkit-scrollbar {
   height: 10px;
   width: 10px;
@@ -39,4 +53,12 @@ textarea {
 
 ::-webkit-scrollbar-track {
   background: rgba(255, 255, 255, 0.5);
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: #4a453e;
+}
+
+.dark ::-webkit-scrollbar-track {
+  background: rgba(30, 28, 26, 0.5);
 }
