@@ -1,0 +1,42 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  background: #f5f1e8;
+}
+
+button,
+textarea {
+  font: inherit;
+}
+
+.map-grid {
+  background-image:
+    linear-gradient(rgba(87, 72, 53, 0.075) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(87, 72, 53, 0.075) 1px, transparent 1px),
+    radial-gradient(circle at 20% 20%, rgba(14, 116, 144, 0.08), transparent 34%),
+    radial-gradient(circle at 80% 10%, rgba(217, 119, 6, 0.10), transparent 28%),
+    radial-gradient(circle at 50% 80%, rgba(22, 101, 52, 0.08), transparent 30%);
+  background-size: 34px 34px, 34px 34px, 100% 100%, 100% 100%, 100% 100%;
+}
+
+::-webkit-scrollbar {
+  height: 10px;
+  width: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c9bfae;
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.5);
+}
