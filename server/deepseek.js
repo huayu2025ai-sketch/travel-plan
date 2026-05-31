@@ -1,7 +1,7 @@
-const allowedTypes = new Set(['交通', '景点', 'citywalk', '美食', '酒店']);
+const allowedTypes = new Set(['交通', '景点', 'citywalk', '美食', '酒店', '娱乐']);
 
 const systemPrompt =
-  "你是一个专业的旅游规划助手。请根据用户的粗略想法，生成结构化的旅游计划。你必须严格按照 JSON 格式返回数据，不要包含任何 Markdown 语法标记（如 ```json）。确保每个卡片都有唯一的 'id'，类型(type)只能在['交通', '景点', 'citywalk', '美食', '酒店']中选择。";
+  "你是一个专业的旅游规划助手。请根据用户的粗略想法，生成结构化的旅游计划。你必须严格按照 JSON 格式返回数据，不要包含任何 Markdown 语法标记（如 ```json）。确保每个卡片都有唯一的 'id'，类型(type)只能在['交通', '景点', 'citywalk', '美食', '酒店', '娱乐']中选择。";
 
 const schemaPrompt = `请返回如下 JSON 结构：
 {
@@ -26,6 +26,9 @@ const schemaPrompt = `请返回如下 JSON 结构：
 3. 每个 Day 至少返回数组，可以为空。
 4. id 必须唯一，且适合拖拽组件使用。`;
 
+const deepseekTimeoutMs = 60000;
+const maxDeepseekAttempts = 2;
+
 export async function generateTravelPlan(idea) {
   const trimmedIdea = String(idea || '').trim();
 
@@ -42,7 +45,7 @@ export async function generateTravelPlan(idea) {
   }
 
   const deepseekBaseUrl = process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com';
-  const response = await fetch(`${deepseekBaseUrl}/chat/completions`, {
+  const requestOptions = {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${process.env.DEEPSEEK_API_KEY}`,
@@ -57,7 +60,8 @@ export async function generateTravelPlan(idea) {
         { role: 'user', content: `${schemaPrompt}\n\n用户想法：${trimmedIdea}` },
       ],
     }),
-  });
+  };
+  const response = await requestDeepSeek(`${deepseekBaseUrl}/chat/completions`, requestOptions);
 
   if (!response.ok) {
     const detail = await response.text();
@@ -69,9 +73,60 @@ export async function generateTravelPlan(idea) {
 
   const payload = await response.json();
   const content = payload?.choices?.[0]?.message?.content;
-  const parsed = JSON.parse(content);
+  let parsed;
+
+  try {
+    parsed = JSON.parse(content);
+  } catch {
+    const error = new Error('DeepSeek 返回的内容不是有效 JSON，请稍后重试。');
+    error.status = 502;
+    throw error;
+  }
 
   return normalizePlan(parsed);
+}
+
+async function requestDeepSeek(url, options) {
+  let lastError;
+
+  for (let attempt = 1; attempt <= maxDeepseekAttempts; attempt += 1) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), deepseekTimeoutMs);
+
+    try {
+      const response = await fetch(url, { ...options, signal: controller.signal });
+
+      if (response.status >= 500 && attempt < maxDeepseekAttempts) {
+        lastError = response;
+        await response.text().catch(() => '');
+        continue;
+      }
+
+      return response;
+    } catch (error) {
+      lastError = error;
+      if (attempt >= maxDeepseekAttempts) {
+        const friendlyError = new Error(
+          error.name === 'AbortError'
+            ? 'DeepSeek 响应超时，请稍后重试。'
+            : '无法连接 DeepSeek API，请检查网络、代理或 Vercel 环境变量后重试。',
+        );
+        friendlyError.status = 502;
+        friendlyError.detail = error.message;
+        throw friendlyError;
+      }
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  if (lastError instanceof Response) {
+    return lastError;
+  }
+
+  const error = new Error('DeepSeek 请求失败，请稍后重试。');
+  error.status = 502;
+  throw error;
 }
 
 export function normalizePlan(plan) {

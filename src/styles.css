@@ -22,6 +22,44 @@ textarea {
   font: inherit;
 }
 
+.travel-loader {
+  display: inline-flex;
+  height: 1.6rem;
+  width: 1.6rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #0ea5e9;
+  box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.25), 0 8px 18px rgba(120, 113, 108, 0.16);
+  animation: travel-pulse 1.3s ease-in-out infinite;
+}
+
+.dark .travel-loader {
+  background: #2a2724;
+  color: #38bdf8;
+  box-shadow: 0 0 0 1px rgba(251, 191, 36, 0.2), 0 8px 18px rgba(0, 0, 0, 0.28);
+}
+
+.print-frame {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  width: 0;
+  height: 0;
+  border: 0;
+}
+
+@keyframes travel-pulse {
+  0%,
+  100% {
+    transform: translateX(0) rotate(-12deg);
+  }
+  50% {
+    transform: translateX(4px) rotate(8deg);
+  }
+}
+
 .map-grid {
   background-image:
     linear-gradient(rgba(87, 72, 53, 0.075) 1px, transparent 1px),
