@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import html2pdf from 'html2pdf.js';
 import { DragDropContext, Draggable, Droppable } from '@hello-pangea/dnd';
 import {
   AlertCircle,
@@ -21,7 +20,6 @@ import {
   Pencil,
   Plane,
   Plus,
-  Printer,
   Route,
   SlidersHorizontal,
   Sparkles,
@@ -31,7 +29,6 @@ import {
   X,
 } from 'lucide-react';
 import './styles.css';
-import { exportTripToPdf } from './exportPdf.js';
 
 const initialTripPlan = {
   start_date: '',
@@ -219,8 +216,7 @@ function getAllItems(itinerary) {
   return Object.values(itinerary).flat();
 }
 
-function downloadTextFile(content, filename, type) {
-  const blob = new Blob([content], { type });
+function downloadBlobFile(blob, filename) {
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
@@ -229,6 +225,30 @@ function downloadTextFile(content, filename, type) {
   link.click();
   link.remove();
   URL.revokeObjectURL(url);
+}
+
+async function saveBlobFile(blob, filename, description, accept) {
+  if ('showSaveFilePicker' in window) {
+    try {
+      const handle = await window.showSaveFilePicker({
+        suggestedName: filename,
+        types: [{ description, accept }],
+      });
+      const writable = await handle.createWritable();
+      await writable.write(blob);
+      await writable.close();
+      return;
+    } catch (error) {
+      if (error.name === 'AbortError') return;
+      throw error;
+    }
+  }
+
+  downloadBlobFile(blob, filename);
+}
+
+async function saveTextFile(content, filename, type, description, accept) {
+  await saveBlobFile(new Blob([content], { type }), filename, description, accept);
 }
 
 function buildMarkdown(plan) {
@@ -368,82 +388,60 @@ function buildPrintHtml(plan) {
     .map((type) => ({ type, count: allItems.filter((item) => item.type === type).length }))
     .filter(({ count }) => count > 0);
 
+  const exportDate = new Date().toLocaleDateString('zh-CN', {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
   const typeLegendHtml = typeCounts
     .map(({ type, count }) => {
       const meta = getPrintTypeMeta(type);
       return `
-        <div class="legend-item" style="--type-color: ${meta.color}; --type-bg: ${meta.bg};">
-          <span class="legend-icon">${meta.icon}</span>
-          <span>${escapeHtml(meta.label)}</span>
-          <strong>${count}</strong>
-        </div>
+        <span class="legend-chip" style="--type-color:${meta.color};--type-bg:${meta.bg};">
+          <i>${meta.icon}</i>${escapeHtml(meta.label)} <b>${count}</b>
+        </span>
       `;
     })
     .join('');
 
-  const routeHtml = entries
-    .map(
-      ([day, items], index) => `
-        <div class="route-stop">
-          <span>${index + 1}</span>
-          <strong>${escapeHtml(day)}</strong>
-          ${
-            getDayDateInfo(plan.start_date, day).displayText
-              ? `<small class="${getDayDateInfo(plan.start_date, day).dayType}">${escapeHtml(getDayDateInfo(plan.start_date, day).displayText)}</small>`
-              : ''
-          }
-          <em>${items.length} 项</em>
-        </div>
-      `,
-    )
-    .join('');
-
-  const heroImage = allItems[0] ? buildGuideImageDataUri(allItems[0], '攻略封面', 0) : '';
-  const daysHtml = Object.entries(plan.itinerary)
+  const daysHtml = entries
     .map(([day, items]) => {
+      const dateInfo = getDayDateInfo(plan.start_date, day);
       const itemsHtml = items.length
         ? items
-            .map(
-              (item, index) => {
-                const meta = getPrintTypeMeta(item.type);
-                const imageSrc = buildGuideImageDataUri(item, day, index);
-                return `
-                  <article class="guide-story" style="--type-color: ${meta.color}; --type-bg: ${meta.bg};">
-                    <figure>
-                      <img src="${imageSrc}" alt="${escapeHtml(item.title)} 配图" />
-                    </figure>
-                    <div class="story-copy">
-                      <div class="story-meta">
-                        <span class="type-chip"><i>${meta.icon}</i>${escapeHtml(meta.label)}</span>
-                        <em>${String(index + 1).padStart(2, '0')}</em>
-                      </div>
-                      <h3>${escapeHtml(item.title)}</h3>
-                      <p class="story-intro">${escapeHtml(item.advice)}</p>
-                      <dl>
-                        <div><dt>预算</dt><dd>${escapeHtml(item.cost)}</dd></div>
-                        <div><dt>建议时长</dt><dd>${escapeHtml(item.duration)}</dd></div>
-                      </dl>
+            .map((item, index) => {
+              const meta = getPrintTypeMeta(item.type);
+              return `
+                <article class="itinerary-item" style="--type-color:${meta.color};--type-bg:${meta.bg};">
+                  <div class="item-index">${String(index + 1).padStart(2, '0')}</div>
+                  <div class="item-main">
+                    <div class="item-topline">
+                      <span class="type-chip"><i>${meta.icon}</i>${escapeHtml(meta.label)}</span>
+                      <span class="item-meta">费用 ${escapeHtml(item.cost)} · ${escapeHtml(item.duration)}</span>
                     </div>
-                  </article>
-                `;
-              },
-            )
+                    <h3>${escapeHtml(item.title)}</h3>
+                    <p>${escapeHtml(item.advice)}</p>
+                  </div>
+                </article>
+              `;
+            })
             .join('')
-        : '<p class="empty">暂无行程</p>';
+        : '<div class="empty">暂无行程安排</div>';
 
       return `
         <section class="day">
           <div class="day-title">
-            <span>DAY GUIDE</span>
-            <h2>${escapeHtml(day)}</h2>
+            <div>
+              <span>DAY ${parseDayNumber(day)}</span>
+              <h2>${escapeHtml(day)}</h2>
+            </div>
             ${
-              getDayDateInfo(plan.start_date, day).displayText
-                ? `<strong class="${getDayDateInfo(plan.start_date, day).dayType}">${escapeHtml(getDayDateInfo(plan.start_date, day).displayText)}</strong>`
+              dateInfo.displayText
+                ? `<strong class="${dateInfo.dayType}">${escapeHtml(dateInfo.displayText)}</strong>`
                 : ''
             }
-            <p>${items.length} 项安排 · 按攻略顺序阅读</p>
           </div>
-          <div class="story-list">${itemsHtml}</div>
+          ${itemsHtml}
         </section>
       `;
     })
@@ -457,388 +455,185 @@ function buildPrintHtml(plan) {
         <title>AI 旅行规划</title>
         <style>
           * { box-sizing: border-box; }
-          @page { margin: 14mm; size: A4; }
+          @page { margin: 10mm; size: A4; }
           body {
             margin: 0;
             padding: 0;
             color: #1c1917;
             font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", "Source Han Sans SC", sans-serif;
-            background:
-              radial-gradient(circle at 10% 6%, rgba(14, 165, 233, 0.10), transparent 30%),
-              radial-gradient(circle at 92% 3%, rgba(245, 158, 11, 0.12), transparent 26%),
-              radial-gradient(circle at 50% 95%, rgba(16, 185, 129, 0.06), transparent 35%),
-              linear-gradient(180deg, #fffbf5 0%, #ffffff 40%);
+            background: #ffffff;
           }
-          h1 {
-            margin: 0;
-            max-width: 520px;
-            font-size: 36px;
-            letter-spacing: -0.01em;
-            line-height: 1.12;
-            font-family: "Noto Serif SC", "Songti SC", "Source Han Serif SC", serif;
-            font-weight: 900;
+          .page {
+            width: 794px;
+            min-height: 1123px;
+            padding: 34px 38px;
+            background: #ffffff;
           }
-          .cover {
-            position: relative;
-            overflow: hidden;
-            display: grid;
-            grid-template-columns: 1.05fr 0.95fr;
+          .header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
             gap: 24px;
-            min-height: 290px;
-            border: 1px solid #e7e5e4;
-            border-radius: 24px;
-            padding: 28px;
-            background:
-              linear-gradient(135deg, rgba(255, 255, 255, 0.98), rgba(255, 250, 245, 0.92)),
-              repeating-linear-gradient(45deg, rgba(12, 74, 110, 0.04) 0 1px, transparent 1px 22px);
-            box-shadow: 0 16px 40px rgba(87, 83, 78, 0.08);
+            padding: 24px;
+            border-radius: 22px;
+            color: #fff;
+            background: linear-gradient(135deg, #0f766e 0%, #0f172a 100%);
           }
-          .cover::after {
-            content: "";
-            position: absolute;
-            right: -42px;
-            bottom: -60px;
-            width: 260px;
-            height: 180px;
-            border-radius: 48% 52% 0 0;
-            background: linear-gradient(135deg, #0ea5e9, #10b981 48%, #f59e0b);
-            opacity: 0.17;
-            transform: rotate(-12deg);
-          }
-          .hero-photo {
-            position: relative;
-            z-index: 1;
-            align-self: stretch;
-            min-height: 230px;
-            margin: 0;
-            overflow: hidden;
-            border: 8px solid #ffffff;
-            border-radius: 24px;
-            box-shadow: 0 20px 45px rgba(87, 83, 78, 0.16);
-            transform: rotate(1.2deg);
-          }
-          .hero-photo img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-            display: block;
-          }
-          .eyebrow {
-            display: inline-block;
-            margin-bottom: 14px;
-            border: 1px solid #fed7aa;
-            border-radius: 999px;
-            padding: 6px 10px;
-            color: #9a3412;
-            background: #fff7ed;
-            font-size: 12px;
-            font-weight: 700;
-          }
-          .cover-copy {
-            position: relative;
-            z-index: 1;
-          }
-          .cover-copy > p {
-            max-width: 560px;
-            margin: 12px 0 0;
-            color: #57534e;
-            line-height: 1.8;
-          }
+          .eyebrow { margin: 0 0 8px; color: rgba(255,255,255,.72); font-size: 12px; font-weight: 800; letter-spacing: .16em; }
+          h1 { margin: 0; font-size: 34px; line-height: 1.18; letter-spacing: -.02em; }
+          .header-note { margin: 12px 0 0; color: rgba(255,255,255,.76); font-size: 13px; line-height: 1.7; }
+          .generated { min-width: 150px; text-align: right; color: rgba(255,255,255,.78); font-size: 12px; font-weight: 700; }
           .summary {
             display: grid;
             grid-template-columns: repeat(4, minmax(0, 1fr));
-            gap: 12px;
-            margin: 18px 0 0;
+            gap: 10px;
+            margin: 18px 0;
           }
-          .summary div {
+          .summary-card {
+            min-height: 78px;
             border: 1px solid #e7e5e4;
-            border-radius: 16px;
-            padding: 16px 14px;
-            background: rgba(255, 255, 255, 0.88);
-            box-shadow: 0 8px 24px rgba(120, 113, 108, 0.07);
-            transition: transform 0.2s ease;
+            border-radius: 14px;
+            padding: 12px;
+            background: #fafaf9;
           }
-          .label {
-            margin: 0 0 6px;
-            color: #78716c;
-            font-size: 12px;
-            font-weight: 700;
-            letter-spacing: 0.04em;
-          }
-          .value { margin: 0; font-size: 18px; font-weight: 800; }
-          .route-map {
-            display: grid;
-            grid-template-columns: repeat(${Math.max(dayCount, 1)}, minmax(72px, 1fr));
-            gap: 0;
-            margin: 22px 0 20px;
-            border: 1px solid #e7e5e4;
-            border-radius: 18px;
-            padding: 18px;
-            background: rgba(255, 255, 255, 0.76);
-          }
-          .route-stop {
-            position: relative;
-            min-height: 76px;
-            padding-top: 38px;
-            text-align: center;
-          }
-          .route-stop::before {
-            content: "";
-            position: absolute;
-            left: 0;
-            right: 0;
-            top: 17px;
-            height: 2px;
-            background: #d6d3d1;
-          }
-          .route-stop:first-child::before { left: 50%; }
-          .route-stop:last-child::before { right: 50%; }
-          .route-stop span {
-            position: absolute;
-            left: 50%;
-            top: 0;
-            display: grid;
-            width: 34px;
-            height: 34px;
-            place-items: center;
-            border: 3px solid #ffffff;
-            border-radius: 999px;
-            color: #ffffff;
-            background: #0f766e;
-            box-shadow: 0 8px 18px rgba(15, 118, 110, 0.25);
-            transform: translateX(-50%);
-            font-weight: 800;
-          }
-          .route-stop strong,
-          .route-stop small,
-          .route-stop em {
-            display: block;
-            font-style: normal;
-          }
-          .route-stop strong { font-size: 13px; }
-          .route-stop small { margin-top: 3px; font-size: 10px; font-weight: 800; }
-          .route-stop small.weekday { color: #0f766e; }
-          .route-stop small.weekend { color: #b45309; }
-          .route-stop em { margin-top: 3px; color: #78716c; font-size: 11px; }
+          .summary-card p { margin: 0 0 6px; color: #78716c; font-size: 11px; font-weight: 800; letter-spacing: .08em; }
+          .summary-card strong { color: #1c1917; font-size: 16px; line-height: 1.35; }
           .legend {
             display: flex;
             flex-wrap: wrap;
             gap: 8px;
-            margin: 0 0 20px;
+            margin: 0 0 18px;
           }
-          .legend-item {
+          .legend-chip {
             display: inline-flex;
             align-items: center;
-            gap: 7px;
-            border: 1px solid var(--type-color);
+            gap: 6px;
+            border: 1px solid rgba(120,113,108,.2);
             border-radius: 999px;
-            padding: 7px 10px;
+            padding: 6px 10px;
             background: var(--type-bg);
             color: var(--type-color);
-            font-size: 12px;
+            font-size: 11px;
             font-weight: 800;
           }
-          .legend-icon,
+          .legend-chip i,
           .type-chip i {
             display: inline-grid;
             place-items: center;
+            width: 18px;
+            height: 18px;
             border-radius: 999px;
-            color: #ffffff;
             background: var(--type-color);
+            color: #fff;
             font-style: normal;
-            font-weight: 900;
+            font-size: 10px;
           }
-          .legend-icon { width: 20px; height: 20px; font-size: 11px; }
-          .legend-item strong { color: #1c1917; }
+          .legend-chip b { color: #1c1917; }
           .day {
             break-inside: avoid;
-            margin-top: 26px;
+            page-break-inside: avoid;
+            margin-top: 18px;
           }
           .day-title {
-            border-top: 3px solid #1c1917;
-            padding-top: 14px;
-            margin-bottom: 16px;
-            position: relative;
-          }
-          .day-title::before {
-            content: "";
-            position: absolute;
-            left: 0;
-            top: -3px;
-            width: 80px;
-            height: 3px;
-            background: linear-gradient(90deg, #0ea5e9, #10b981);
-          }
-          .day-title span {
-            color: #a16207;
-            font-size: 11px;
-            font-weight: 900;
-            letter-spacing: 0.16em;
-          }
-          .day h2 {
-            margin: 4px 0 0;
-            font-size: 28px;
-            line-height: 1.1;
-          }
-          .day-title strong {
-            display: block;
-            margin-top: 4px;
-            font-size: 13px;
-          }
-          .day-title strong.weekday { color: #0f766e; }
-          .day-title strong.weekend { color: #b45309; }
-          .day-title p {
-            margin: 5px 0 0;
-            color: #78716c;
-            font-size: 12px;
-            font-weight: 700;
-          }
-          .story-list {
-            display: grid;
-            gap: 14px;
-          }
-          .guide-story {
-            display: grid;
-            grid-template-columns: 228px minmax(0, 1fr);
-            gap: 18px;
-            align-items: stretch;
-            break-inside: avoid;
-            border-bottom: 1px solid #e7e5e4;
-            padding: 0 0 16px;
-            margin-bottom: 2px;
-          }
-          .guide-story:nth-child(even) {
-            grid-template-columns: minmax(0, 1fr) 228px;
-          }
-          .guide-story:nth-child(even) figure {
-            order: 2;
-          }
-          .guide-story figure {
-            margin: 0;
-            overflow: hidden;
-            min-height: 142px;
-            border-radius: 18px;
-            background: var(--type-bg);
-          }
-          .guide-story img {
-            width: 100%;
-            height: 100%;
-            min-height: 142px;
-            object-fit: cover;
-            display: block;
-          }
-          .story-copy {
-            padding: 5px 0;
-          }
-          .story-meta {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            gap: 12px;
+            gap: 16px;
+            padding: 12px 14px;
+            border-radius: 14px;
+            background: #1c1917;
+            color: #fff;
           }
-          .story-meta em {
-            color: var(--type-color);
-            font-size: 30px;
-            font-style: normal;
-            font-weight: 900;
-            line-height: 1;
-            opacity: .32;
-          }
-          .guide-story h3 {
-            margin: 10px 0 8px;
-            font-size: 21px;
-            line-height: 1.28;
-            font-family: "Noto Serif SC", "Songti SC", serif;
-            font-weight: 800;
-          }
-          .story-intro {
-            margin: 0;
-            color: #57534e;
-            font-size: 13px;
-            line-height: 1.8;
-          }
-          .guide-story dl {
-            display: grid;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 8px;
-            margin: 12px 0 0;
-          }
-          .guide-story dl div {
-            border-left: 4px solid var(--type-color);
-            border-radius: 0 10px 10px 0;
-            padding: 8px 10px;
-            background: var(--type-bg);
-          }
-          .guide-story dt {
-            margin: 0 0 3px;
-            color: #78716c;
+          .day-title span { display: block; color: rgba(255,255,255,.58); font-size: 10px; font-weight: 900; letter-spacing: .18em; }
+          .day-title h2 { margin: 2px 0 0; font-size: 20px; line-height: 1.1; }
+          .day-title strong {
+            flex: 0 0 auto;
+            border-radius: 999px;
+            padding: 6px 10px;
             font-size: 11px;
+            background: rgba(255,255,255,.12);
+          }
+          .day-title strong.weekday { color: #a7f3d0; }
+          .day-title strong.weekend { color: #fde68a; }
+          .itinerary-item {
+            display: grid;
+            grid-template-columns: 46px 1fr;
+            gap: 12px;
+            break-inside: avoid;
+            margin: 10px 0 0;
+            padding: 14px;
+            border: 1px solid #e7e5e4;
+            border-radius: 14px;
+            background: #fff;
+          }
+          .item-index {
+            display: grid;
+            place-items: center;
+            width: 36px;
+            height: 36px;
+            border-radius: 12px;
+            background: var(--type-bg);
+            color: var(--type-color);
             font-weight: 800;
           }
-          .guide-story dd {
-            margin: 0;
-            color: #1c1917;
-            font-size: 13px;
-            font-weight: 800;
-          }
+          .item-topline { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
           .type-chip {
             display: inline-flex;
             align-items: center;
             gap: 6px;
-            border: 1px solid var(--type-color);
             border-radius: 999px;
             padding: 4px 9px 4px 5px;
             color: var(--type-color);
             background: var(--type-bg);
+            font-size: 11px;
             font-weight: 800;
           }
-          .type-chip i { width: 18px; height: 18px; font-size: 10px; }
+          .item-meta { color: #57534e; font-size: 12px; font-weight: 700; }
+          .itinerary-item h3 { margin: 8px 0 6px; color: #1c1917; font-size: 17px; line-height: 1.35; }
+          .itinerary-item p { margin: 0; color: #57534e; font-size: 12px; line-height: 1.65; }
           .empty {
+            margin-top: 10px;
             border: 1px dashed #d6d3d1;
-            border-radius: 14px;
-            padding: 18px;
-            color: #78716c;
-            background: rgba(255, 255, 255, 0.72);
+            border-radius: 12px;
+            padding: 14px;
+            color: #a8a29e;
+            background: #fafaf9;
           }
-          @media print {
-            body { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
-            .cover { page-break-after: avoid; }
-            .summary { grid-template-columns: repeat(4, 1fr); }
-            .guide-story { grid-template-columns: 228px minmax(0, 1fr); }
-            .guide-story:nth-child(even) { grid-template-columns: minmax(0, 1fr) 228px; }
-          }
+          .footer { margin-top: 24px; padding-top: 12px; border-top: 1px solid #e7e5e4; color: #a8a29e; text-align: center; font-size: 10px; }
         </style>
       </head>
       <body>
-        <section class="cover">
-          <div class="cover-copy">
-            <span class="eyebrow">AI 旅行规划</span>
-            <h1>一份可直接出发的旅行攻略</h1>
-            <p>把每日路线、停留时长、预算提醒和旅行建议整理成攻略阅读版，适合打印携带或分享给同行人。</p>
-            <div class="summary">
-              <div>
-                <p class="label">预算预估</p>
-                <p class="value">${escapeHtml(plan.total_budget_estimate)}</p>
-              </div>
-              <div>
-                <p class="label">推荐交通</p>
-                <p class="value">${escapeHtml(plan.recommended_transport)}</p>
-              </div>
-              <div>
-                <p class="label">规划天数</p>
-                <p class="value">${dayCount} 天</p>
-              </div>
-              <div>
-                <p class="label">行程项目</p>
-                <p class="value">${itemCount} 项</p>
-              </div>
+        <main class="page">
+          <section class="header">
+            <div>
+              <p class="eyebrow">AI TRAVEL PLAN</p>
+              <h1>旅行行程单</h1>
+              <p class="header-note">按天整理交通、景点、餐饮、住宿与娱乐安排，适合打印携带或分享给同行人。</p>
             </div>
-          </div>
-          ${heroImage ? `<figure class="hero-photo"><img src="${heroImage}" alt="旅行攻略封面图" /></figure>` : ''}
-        </section>
-        <section class="route-map">${routeHtml}</section>
-        <section class="legend">${typeLegendHtml}</section>
-        ${daysHtml}
+            <div class="generated">生成日期<br>${escapeHtml(exportDate)}</div>
+          </section>
+          <section class="summary">
+              <div class="summary-card">
+                <p class="label">预算预估</p>
+                <strong>${escapeHtml(plan.total_budget_estimate)}</strong>
+              </div>
+              <div class="summary-card">
+                <p class="label">推荐交通</p>
+                <strong>${escapeHtml(plan.recommended_transport)}</strong>
+              </div>
+              <div class="summary-card">
+                <p class="label">规划天数</p>
+                <strong>${dayCount} 天</strong>
+              </div>
+              <div class="summary-card">
+                <p class="label">行程项目</p>
+                <strong>${itemCount} 项</strong>
+              </div>
+          </section>
+          ${typeLegendHtml ? `<section class="legend">${typeLegendHtml}</section>` : ''}
+          ${daysHtml}
+          <div class="footer">由 AI 旅游规划看板生成</div>
+        </main>
       </body>
     </html>
   `;
@@ -1887,83 +1682,35 @@ function App() {
     setEditingCardId('');
   };
 
-  const exportPlan = () => {
-    downloadTextFile(
+  const exportPlan = async () => {
+    await saveTextFile(
       JSON.stringify(currentPlanForExport, null, 2),
       `travel-plan-${new Date().toISOString().slice(0, 10)}.json`,
       'application/json;charset=utf-8',
+      'JSON 文件',
+      { 'application/json': ['.json'] },
     );
   };
 
-  const exportMarkdown = () => {
-    downloadTextFile(
+  const exportMarkdown = async () => {
+    await saveTextFile(
       buildMarkdown(currentPlanForExport),
       `travel-plan-${new Date().toISOString().slice(0, 10)}.md`,
       'text/markdown;charset=utf-8',
+      'Markdown 文件',
+      { 'text/markdown': ['.md'], 'text/plain': ['.txt'] },
     );
-  };
-
-  const exportPdf = async () => {
-    setIsExportMenuOpen(false);
-
-    const iframe = document.createElement('iframe');
-    iframe.title = 'travel-plan-pdf';
-    iframe.style.cssText =
-      'position:fixed;left:0;top:0;width:794px;height:1123px;opacity:0.005;pointer-events:none;z-index:-1;border:none;overflow:hidden;';
-    document.body.appendChild(iframe);
-
-    const doc = iframe.contentDocument || iframe.contentWindow.document;
-    doc.open();
-    doc.write(buildPrintHtml(currentPlanForExport));
-    doc.close();
-
-    await new Promise((resolve) => {
-      if (iframe.contentDocument?.fonts) {
-        iframe.contentDocument.fonts.ready.then(resolve);
-      } else {
-        setTimeout(resolve, 400);
-      }
-    });
-
-    const body = doc.body;
-
-    const opt = {
-      margin: [10, 10],
-      filename: `travel-plan-${new Date().toISOString().slice(0, 10)}.pdf`,
-      image: { type: 'jpeg', quality: 0.96 },
-      html2canvas: {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: '#ffffff',
-        width: 794,
-        windowWidth: 794,
-      },
-      jsPDF: { unit: 'px', format: [794, 1123], orientation: 'portrait' },
-      pagebreak: { mode: ['avoid-all', 'css'] },
-    };
-
-    try {
-      await html2pdf().set(opt).from(body).save();
-    } catch (e) {
-      setError('PDF 导出失败，请重试。');
-    } finally {
-      setTimeout(() => {
-        if (iframe.parentNode) document.body.removeChild(iframe);
-      }, 1000);
-    }
   };
 
   const exportImage = async () => {
     try {
       const blob = await buildPlanImageBlob(currentPlanForExport);
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `travel-plan-${new Date().toISOString().slice(0, 10)}.png`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(url);
+      await saveBlobFile(
+        blob,
+        `travel-plan-${new Date().toISOString().slice(0, 10)}.png`,
+        'PNG 图片',
+        { 'image/png': ['.png'] },
+      );
     } catch (imageError) {
       setError(imageError.message || '图片导出失败，请稍后重试。');
     }
@@ -2143,14 +1890,6 @@ function App() {
                     >
                       <FileText className="h-4 w-4" />
                       Markdown
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => runExportAction(exportPdf)}
-                      className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-xs font-semibold text-stone-600 transition hover:bg-stone-50 dark:text-[#9a9389] dark:hover:bg-[#2e2b26]"
-                    >
-                      <Printer className="h-4 w-4" />
-                      PDF
                     </button>
                     <button
                       type="button"
