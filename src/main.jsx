@@ -1905,15 +1905,27 @@ function App() {
 
   const exportPdf = async () => {
     setIsExportMenuOpen(false);
-    const container = document.createElement('div');
-    container.innerHTML = buildPrintHtml(currentPlanForExport);
-    container.style.position = 'fixed';
-    container.style.left = '-9999px';
-    container.style.top = '0';
-    document.body.appendChild(container);
 
-    await document.fonts.ready;
-    await new Promise((resolve) => setTimeout(resolve, 120));
+    const iframe = document.createElement('iframe');
+    iframe.title = 'travel-plan-pdf';
+    iframe.style.cssText =
+      'position:fixed;left:0;top:0;width:794px;height:1123px;opacity:0.005;pointer-events:none;z-index:-1;border:none;overflow:hidden;';
+    document.body.appendChild(iframe);
+
+    const doc = iframe.contentDocument || iframe.contentWindow.document;
+    doc.open();
+    doc.write(buildPrintHtml(currentPlanForExport));
+    doc.close();
+
+    await new Promise((resolve) => {
+      if (iframe.contentDocument?.fonts) {
+        iframe.contentDocument.fonts.ready.then(resolve);
+      } else {
+        setTimeout(resolve, 400);
+      }
+    });
+
+    const body = doc.body;
 
     const opt = {
       margin: [10, 10],
@@ -1924,17 +1936,20 @@ function App() {
         useCORS: true,
         backgroundColor: '#ffffff',
         width: 794,
+        windowWidth: 794,
       },
       jsPDF: { unit: 'px', format: [794, 1123], orientation: 'portrait' },
       pagebreak: { mode: ['avoid-all', 'css'] },
     };
 
     try {
-      await html2pdf().set(opt).from(container).save();
+      await html2pdf().set(opt).from(body).save();
     } catch (e) {
       setError('PDF 导出失败，请重试。');
     } finally {
-      document.body.removeChild(container);
+      setTimeout(() => {
+        if (iframe.parentNode) document.body.removeChild(iframe);
+      }, 1000);
     }
   };
 
