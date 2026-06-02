@@ -140,6 +140,7 @@ const typeAccent = {
 
 const typeOptions = ['交通', '景点', 'citywalk', '美食', '酒店', '娱乐'];
 const storageKey = 'travel-plan-board-v1';
+const conversationStorageKey = 'travel-plan-conversation-v1';
 const themeKey = 'travel-plan-theme';
 const generationStages = [
   '解析目的地与出行天数',
@@ -824,6 +825,35 @@ function loadStoredPlan() {
   }
 }
 
+function loadStoredConversation() {
+  if (typeof window === 'undefined') return [];
+
+  try {
+    const storedConversation = window.localStorage.getItem(conversationStorageKey);
+    const parsedConversation = storedConversation ? JSON.parse(storedConversation) : [];
+    return Array.isArray(parsedConversation) ? parsedConversation.slice(-8) : [];
+  } catch {
+    return [];
+  }
+}
+
+function hasPlanContent(plan) {
+  return getAllItems(plan.itinerary).length > 0 || Boolean(plan.start_date) || plan.recommended_transport !== '待推荐';
+}
+
+function isInitialDemoPlan(plan) {
+  return JSON.stringify(normalizeImportedPlan(plan)) === JSON.stringify(normalizeImportedPlan(initialTripPlan));
+}
+
+function compactPlanForAi(plan) {
+  return withComputedBudget({
+    start_date: plan.start_date || '',
+    total_budget_estimate: plan.total_budget_estimate || '',
+    recommended_transport: plan.recommended_transport || '待推荐',
+    itinerary: plan.itinerary,
+  });
+}
+
 function renumberItineraryDays(itinerary) {
   return Object.fromEntries(Object.values(itinerary).map((items, index) => [`Day ${index + 1}`, items]));
 }
@@ -1366,6 +1396,7 @@ function App() {
   const [isAddFormOpen, setIsAddFormOpen] = useState(false);
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
   const [activeTypes, setActiveTypes] = useState(typeOptions);
+  const [conversationHistory, setConversationHistory] = useState(loadStoredConversation);
   const [generationProgress, setGenerationProgress] = useState(0);
   const [generationStageIndex, setGenerationStageIndex] = useState(0);
   const { theme, setTheme } = useTheme();
@@ -1383,6 +1414,8 @@ function App() {
     counts[type] = getAllItems(plan.itinerary).filter((item) => item.type === type).length;
     return counts;
   }, {});
+  const hasCurrentPlanContext = hasPlanContent(plan) && !isInitialDemoPlan(plan);
+  const hasAiContext = hasCurrentPlanContext || conversationHistory.length > 0;
 
   useEffect(() => {
     try {
@@ -1391,6 +1424,14 @@ function App() {
       // Local storage can be unavailable in restricted browser modes; the board still works in memory.
     }
   }, [plan]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(conversationStorageKey, JSON.stringify(conversationHistory.slice(-8)));
+    } catch {
+      // Context history is a convenience feature; generation still works without local storage.
+    }
+  }, [conversationHistory]);
 
   useEffect(() => {
     if (!isGenerating) {
@@ -1520,10 +1561,16 @@ function App() {
     setError('');
 
     try {
+      const requestHistory = conversationHistory.slice(-6);
+      const requestPlan = hasCurrentPlanContext ? compactPlanForAi(plan) : null;
       const response = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ idea: trimmedIdea }),
+        body: JSON.stringify({
+          idea: trimmedIdea,
+          currentPlan: requestPlan,
+          history: requestHistory,
+        }),
       });
       const responseText = await response.text();
       let data;
@@ -1540,6 +1587,16 @@ function App() {
 
       const generatedPlan = normalizeImportedPlan(data);
       setPlan(generatedPlan);
+      setConversationHistory((currentHistory) =>
+        [
+          ...currentHistory,
+          { role: 'user', content: trimmedIdea },
+          {
+            role: 'assistant',
+            content: `已生成/优化 ${Object.keys(generatedPlan.itinerary).length} 天、${getAllItems(generatedPlan.itinerary).length} 项行程。`,
+          },
+        ].slice(-8),
+      );
       setCardForm(createEmptyCardForm(Object.keys(generatedPlan.itinerary)[0] || 'Day 1'));
       setEditingCardId('');
       setPendingDeleteId('');
@@ -1565,6 +1622,7 @@ function App() {
 
     try {
       window.localStorage.removeItem(storageKey);
+      window.localStorage.removeItem(conversationStorageKey);
     } catch {
       // The in-memory reset below still works if storage is unavailable.
     }
@@ -1576,6 +1634,7 @@ function App() {
     setEditingCardId('');
     setIsAddFormOpen(false);
     setActiveTypes(typeOptions);
+    setConversationHistory([]);
     setError('');
   };
 
@@ -1769,14 +1828,14 @@ function App() {
               把粗略想法整理成可调整的每日行程
             </h1>
             <p className="mt-3 max-w-3xl text-sm leading-6 text-stone-600 dark:text-[#9a9389] md:text-base">
-              输入旅行想法后生成结构化 JSON，也可以手动添加、删除并拖拽调整卡片。
+              输入旅行想法后生成结构化 JSON，也可以继续输入优化要求，AI 会带入当前草案上下文。
             </p>
           </div>
 
           <form onSubmit={generatePlan} className="rounded-lg border border-stone-200 bg-[#fbfaf7] p-3 transition dark:border-[#3a3630] dark:bg-[#252320]">
             <div className="flex items-center justify-between">
               <label htmlFor="trip-idea" className="text-sm font-semibold text-stone-800 dark:text-[#c4bdb4]">
-                旅行想法
+                {hasAiContext ? '继续优化' : '旅行想法'}
               </label>
               <ThemeToggle theme={theme} setTheme={setTheme} />
             </div>
@@ -1796,12 +1855,17 @@ function App() {
             {isGenerating ? (
               <LoadingProgress progress={generationProgress} stage={generationStages[generationStageIndex]} />
             ) : null}
+            {hasAiContext ? (
+              <div className="mt-3 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-medium leading-5 text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-300">
+                已保留当前行程和最近沟通上下文，本轮输入会作为优化要求处理。点击清空行程后上下文会一并清除。
+              </div>
+            ) : null}
             <button
               type="submit"
               disabled={isGenerating}
               className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-md bg-stone-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-stone-800 disabled:cursor-not-allowed disabled:bg-stone-500 dark:bg-[#e8e4df] dark:text-[#141210] dark:hover:bg-[#d8d4cf] dark:disabled:bg-[#3a3630] dark:disabled:text-[#7a746c]"
             >
-              {isGenerating ? '正在生成行程' : '生成行程草案'}
+              {isGenerating ? '正在生成行程' : hasAiContext ? '优化当前行程' : '生成行程草案'}
               {isGenerating ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
             </button>
             <button

@@ -27,7 +27,10 @@ function travelApiPlugin() {
 
         try {
           const body = await readJsonBody(req);
-          const plan = await generateTravelPlan(body.idea);
+          const plan = await generateTravelPlan(body.idea, {
+            currentPlan: body.currentPlan,
+            history: body.history,
+          });
           sendJson(res, 200, plan);
         } catch (error) {
           sendJson(res, error.status || 500, {

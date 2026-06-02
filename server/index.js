@@ -9,7 +9,10 @@ app.use(express.json({ limit: '1mb' }));
 
 app.post('/api/generate', async (req, res) => {
   try {
-    const plan = await generateTravelPlan(req.body?.idea);
+    const plan = await generateTravelPlan(req.body?.idea, {
+      currentPlan: req.body?.currentPlan,
+      history: req.body?.history,
+    });
     res.json(plan);
   } catch (error) {
     res.status(error.status || 500).json({
