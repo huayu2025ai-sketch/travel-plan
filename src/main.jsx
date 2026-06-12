@@ -1744,6 +1744,7 @@ function App() {
   const [conversationHistory, setConversationHistory] = useState(loadStoredConversation);
   const [generationProgress, setGenerationProgress] = useState(0);
   const [generationStageIndex, setGenerationStageIndex] = useState(0);
+  const packingSectionRef = useRef(null);
   const { theme, setTheme } = useTheme();
   const days = Object.entries(plan.itinerary);
   const dayNames = Object.keys(plan.itinerary);
@@ -2085,6 +2086,13 @@ function App() {
     setPackingSearchQuery('');
   };
 
+  const scrollToPackingList = () => {
+    setIsPackingCollapsed(false);
+    window.requestAnimationFrame(() => {
+      packingSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  };
+
   const deleteCard = (day, cardId) => {
     setItinerary({
       ...plan.itinerary,
@@ -2326,15 +2334,21 @@ function App() {
               </p>
             </div>
           </div>
-          <div className="rounded-lg border border-stone-200 bg-white/85 p-4 shadow-soft backdrop-blur transition dark:border-[#3a3630] dark:bg-[#1e1c1a]/85 dark:shadow-soft-dark">
+          <button
+            type="button"
+            onClick={scrollToPackingList}
+            className="group rounded-lg border border-stone-200 bg-white/85 p-4 text-left shadow-soft backdrop-blur transition hover:-translate-y-0.5 hover:border-rose-200 hover:bg-rose-50/60 hover:shadow-card focus:outline-none focus:ring-2 focus:ring-rose-200 dark:border-[#3a3630] dark:bg-[#1e1c1a]/85 dark:shadow-soft-dark dark:hover:border-rose-900/60 dark:hover:bg-rose-950/20 dark:focus:ring-rose-900/60"
+            aria-label="查看携带物品清单"
+          >
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-stone-400 dark:text-[#5e584f]">携带物品</p>
             <div className="mt-2 flex items-center gap-3">
-              <Backpack className="h-6 w-6 text-rose-600" />
+              <Backpack className="h-6 w-6 text-rose-600 transition group-hover:scale-105" />
               <p className="text-2xl font-bold text-stone-950 dark:text-[#e8e4df]">
                 {packedItemCount}/{packingItems.length}件
               </p>
             </div>
-          </div>
+            <p className="mt-2 text-xs font-semibold text-rose-700 opacity-85 dark:text-rose-300">查看清单</p>
+          </button>
         </section>
 
         <section className="mt-5 flex-1 overflow-hidden rounded-lg border border-stone-200 bg-white/70 p-3 shadow-soft backdrop-blur transition dark:border-[#3a3630] dark:bg-[#1e1c1a]/70 dark:shadow-soft-dark">
@@ -2582,22 +2596,24 @@ function App() {
           )}
         </section>
 
-        <PackingList
-          items={packingItems}
-          form={packingForm}
-          isCollapsed={isPackingCollapsed}
-          activeCategory={activePackingCategory}
-          searchQuery={packingSearchQuery}
-          onFormField={updatePackingForm}
-          onAddItem={addPackingItem}
-          onToggleCollapsed={() => setIsPackingCollapsed((isCollapsed) => !isCollapsed)}
-          onCategoryFilter={setActivePackingCategory}
-          onSearchQuery={setPackingSearchQuery}
-          onClearFilters={clearPackingFilters}
-          onToggleItem={togglePackingItem}
-          onDeleteItem={deletePackingItem}
-          onReorderItems={reorderPackingItems}
-        />
+        <div id="packing-list" ref={packingSectionRef} className="scroll-mt-5">
+          <PackingList
+            items={packingItems}
+            form={packingForm}
+            isCollapsed={isPackingCollapsed}
+            activeCategory={activePackingCategory}
+            searchQuery={packingSearchQuery}
+            onFormField={updatePackingForm}
+            onAddItem={addPackingItem}
+            onToggleCollapsed={() => setIsPackingCollapsed((isCollapsed) => !isCollapsed)}
+            onCategoryFilter={setActivePackingCategory}
+            onSearchQuery={setPackingSearchQuery}
+            onClearFilters={clearPackingFilters}
+            onToggleItem={togglePackingItem}
+            onDeleteItem={deletePackingItem}
+            onReorderItems={reorderPackingItems}
+          />
+        </div>
       </div>
     </main>
   );
