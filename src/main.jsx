@@ -1469,6 +1469,8 @@ function PackingList({
   isCollapsed,
   activeCategory,
   searchQuery,
+  editingPackingId,
+  editingPackingForm,
   onFormField,
   onAddItem,
   onToggleCollapsed,
@@ -1478,6 +1480,10 @@ function PackingList({
   onToggleItem,
   onDeleteItem,
   onReorderItems,
+  onStartEditPackingItem,
+  onEditPackingField,
+  onSavePackingItemEdit,
+  onCancelPackingItemEdit,
 }) {
   const packedCount = items.filter((item) => item.packed).length;
   const progress = items.length ? Math.round((packedCount / items.length) * 100) : 0;
@@ -1641,72 +1647,145 @@ function PackingList({
                   }`}
                 >
                   {filteredItems.length > 0 ? (
-                    filteredItems.map((item, index) => (
-                      <Draggable key={item.id} draggableId={`packing-${item.id}`} index={index}>
-                        {(dragProvided, dragSnapshot) => (
-                          <article
-                            ref={dragProvided.innerRef}
-                            {...dragProvided.draggableProps}
-                            style={dragProvided.draggableProps.style}
-                            className={`flex items-start gap-3 rounded-lg border p-3 transition ${
-                              dragSnapshot.isDragging
-                                ? 'border-stone-400 shadow-card ring-2 ring-stone-300 dark:border-[#5a554e] dark:ring-[#4a453e] dark:shadow-card-dark'
-                                : item.packed
-                                  ? 'border-emerald-200 bg-emerald-50/80 dark:border-emerald-900/50 dark:bg-emerald-950/20'
-                                  : 'border-stone-200 bg-white/80 dark:border-[#3a3630] dark:bg-[#252320]'
-                            }`}
-                          >
-                            <button
-                              type="button"
-                              onClick={() => onToggleItem(item.id)}
-                              aria-label={item.packed ? `取消携带 ${item.name}` : `标记已携带 ${item.name}`}
-                              className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border transition ${
-                                item.packed
-                                  ? 'border-emerald-600 bg-emerald-600 text-white'
-                                  : 'border-stone-300 bg-white text-transparent hover:border-emerald-500 dark:border-[#5a554e] dark:bg-[#1e1c1a]'
+                    filteredItems.map((item, index) => {
+                      const isEditing = editingPackingId === item.id;
+                      return (
+                        <Draggable
+                          key={item.id}
+                          draggableId={`packing-${item.id}`}
+                          index={index}
+                          isDragDisabled={isEditing}
+                        >
+                          {(dragProvided, dragSnapshot) => (
+                            <article
+                              ref={dragProvided.innerRef}
+                              {...dragProvided.draggableProps}
+                              style={dragProvided.draggableProps.style}
+                              className={`rounded-lg border p-3 transition ${
+                                dragSnapshot.isDragging
+                                  ? 'border-stone-400 shadow-card ring-2 ring-stone-300 dark:border-[#5a554e] dark:ring-[#4a453e] dark:shadow-card-dark'
+                                  : item.packed
+                                    ? 'border-emerald-200 bg-emerald-50/80 dark:border-emerald-900/50 dark:bg-emerald-950/20'
+                                    : 'border-stone-200 bg-white/80 dark:border-[#3a3630] dark:bg-[#252320]'
                               }`}
                             >
-                              <Check className="h-3.5 w-3.5" />
-                            </button>
-                            <div className="min-w-0 flex-1">
-                              <div className="flex min-w-0 items-center gap-2">
-                                <h3 className={`truncate text-sm font-semibold ${item.packed ? 'text-emerald-900 line-through decoration-emerald-500/60 dark:text-emerald-200' : 'text-stone-950 dark:text-[#e8e4df]'}`}>
-                                  {item.name}
-                                </h3>
-                                <span className="shrink-0 rounded-full border border-stone-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-stone-500 dark:border-[#3a3630] dark:bg-[#1e1c1a] dark:text-[#9a9389]">
-                                  {item.category}
-                                </span>
-                              </div>
-                              <p className="mt-1 text-xs font-medium text-stone-500 dark:text-[#7a746c]">
-                                数量：{item.quantity || '1'}
-                              </p>
-                              {item.note ? (
-                                <p className="mt-2 text-sm leading-5 text-stone-600 dark:text-[#9a9389]">{item.note}</p>
-                              ) : null}
-                            </div>
-                            <div className="flex shrink-0 items-center gap-1">
-                              <button
-                                type="button"
-                                onClick={() => onDeleteItem(item.id)}
-                                aria-label={`删除 ${item.name}`}
-                                className="flex h-8 w-8 items-center justify-center rounded-full text-stone-400 transition hover:bg-red-50 hover:text-red-600 dark:text-[#5e584f] dark:hover:bg-red-950/30 dark:hover:text-red-400"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </button>
-                              <div
-                                {...dragProvided.dragHandleProps}
-                                role="button"
-                                aria-label={`拖拽 ${item.name}`}
-                                title="拖拽调整顺序"
-                                className="flex h-8 w-8 cursor-grab items-center justify-center rounded-full text-stone-400 transition hover:bg-stone-100 hover:text-stone-700 active:cursor-grabbing dark:text-[#5e584f] dark:hover:bg-[#2e2b26] dark:hover:text-[#b5afa6]"
-                              >
-                                <GripVertical className="h-4 w-4" />
-                              </div>
-                            </div>
-                          </article>
-                        )}
-                      </Draggable>
-                    ))
+                              {isEditing ? (
+                                <div className="space-y-2">
+                                  <div className="grid gap-2 sm:grid-cols-[130px_1fr_100px]">
+                                    <select
+                                      value={editingPackingForm.category}
+                                      onChange={(event) => onEditPackingField('category', event.target.value)}
+                                      className="h-9 rounded-md border border-stone-200 bg-white px-2 text-sm text-stone-700 outline-none transition focus:border-stone-400 dark:border-[#3a3630] dark:bg-[#2a2724] dark:text-[#b5afa6] dark:focus:border-[#5a554e]"
+                                      aria-label="编辑分类"
+                                    >
+                                      {packingCategories.map((category) => (
+                                        <option key={category} value={category}>
+                                          {category}
+                                        </option>
+                                      ))}
+                                    </select>
+                                    <input
+                                      value={editingPackingForm.name}
+                                      onChange={(event) => onEditPackingField('name', event.target.value)}
+                                      className="h-9 rounded-md border border-stone-200 bg-white px-2 text-sm text-stone-700 outline-none transition placeholder:text-stone-400 focus:border-stone-400 dark:border-[#3a3630] dark:bg-[#2a2724] dark:text-[#b5afa6] dark:placeholder:text-[#5e584f] dark:focus:border-[#5a554e]"
+                                      placeholder="物品名称"
+                                    />
+                                    <input
+                                      value={editingPackingForm.quantity}
+                                      onChange={(event) => onEditPackingField('quantity', event.target.value)}
+                                      className="h-9 rounded-md border border-stone-200 bg-white px-2 text-sm text-stone-700 outline-none transition placeholder:text-stone-400 focus:border-stone-400 dark:border-[#3a3630] dark:bg-[#2a2724] dark:text-[#b5afa6] dark:placeholder:text-[#5e584f] dark:focus:border-[#5a554e]"
+                                      placeholder="数量"
+                                    />
+                                  </div>
+                                  <input
+                                    value={editingPackingForm.note}
+                                    onChange={(event) => onEditPackingField('note', event.target.value)}
+                                    className="h-9 w-full rounded-md border border-stone-200 bg-white px-2 text-sm text-stone-700 outline-none transition placeholder:text-stone-400 focus:border-stone-400 dark:border-[#3a3630] dark:bg-[#2a2724] dark:text-[#b5afa6] dark:placeholder:text-[#5e584f] dark:focus:border-[#5a554e]"
+                                    placeholder="备注"
+                                  />
+                                  <div className="flex gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={onSavePackingItemEdit}
+                                      className="inline-flex h-8 flex-1 items-center justify-center gap-1 rounded-md bg-stone-950 px-2 text-xs font-semibold text-white transition hover:bg-stone-800 dark:bg-[#e8e4df] dark:text-[#141210] dark:hover:bg-[#d8d4cf]"
+                                    >
+                                      <Check className="h-3.5 w-3.5" />
+                                      保存
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={onCancelPackingItemEdit}
+                                      className="inline-flex h-8 flex-1 items-center justify-center gap-1 rounded-md border border-stone-200 bg-white px-2 text-xs font-semibold text-stone-700 transition hover:bg-stone-100 dark:border-[#3a3630] dark:bg-[#1e1c1a] dark:text-[#b5afa6] dark:hover:bg-[#2e2b26]"
+                                    >
+                                      <X className="h-3.5 w-3.5" />
+                                      取消
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="flex items-start gap-3">
+                                  <button
+                                    type="button"
+                                    onClick={() => onToggleItem(item.id)}
+                                    aria-label={item.packed ? `取消携带 ${item.name}` : `标记已携带 ${item.name}`}
+                                    className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border transition ${
+                                      item.packed
+                                        ? 'border-emerald-600 bg-emerald-600 text-white'
+                                        : 'border-stone-300 bg-white text-transparent hover:border-emerald-500 dark:border-[#5a554e] dark:bg-[#1e1c1a]'
+                                    }`}
+                                  >
+                                    <Check className="h-3.5 w-3.5" />
+                                  </button>
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex min-w-0 items-center gap-2">
+                                      <h3 className={`truncate text-sm font-semibold ${item.packed ? 'text-emerald-900 line-through decoration-emerald-500/60 dark:text-emerald-200' : 'text-stone-950 dark:text-[#e8e4df]'}`}>
+                                        {item.name}
+                                      </h3>
+                                      <span className="shrink-0 rounded-full border border-stone-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-stone-500 dark:border-[#3a3630] dark:bg-[#1e1c1a] dark:text-[#9a9389]">
+                                        {item.category}
+                                      </span>
+                                    </div>
+                                    <p className="mt-1 text-xs font-medium text-stone-500 dark:text-[#7a746c]">
+                                      数量：{item.quantity || '1'}
+                                    </p>
+                                    {item.note ? (
+                                      <p className="mt-2 text-sm leading-5 text-stone-600 dark:text-[#9a9389]">{item.note}</p>
+                                    ) : null}
+                                  </div>
+                                  <div className="flex shrink-0 items-center gap-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => onStartEditPackingItem(item.id)}
+                                      aria-label={`编辑 ${item.name}`}
+                                      className="flex h-8 w-8 items-center justify-center rounded-full text-stone-400 transition hover:bg-stone-100 hover:text-stone-700 dark:text-[#5e584f] dark:hover:bg-[#2e2b26] dark:hover:text-[#b5afa6]"
+                                    >
+                                      <Pencil className="h-4 w-4" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => onDeleteItem(item.id)}
+                                      aria-label={`删除 ${item.name}`}
+                                      className="flex h-8 w-8 items-center justify-center rounded-full text-stone-400 transition hover:bg-red-50 hover:text-red-600 dark:text-[#5e584f] dark:hover:bg-red-950/30 dark:hover:text-red-400"
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </button>
+                                    <div
+                                      {...dragProvided.dragHandleProps}
+                                      role="button"
+                                      aria-label={`拖拽 ${item.name}`}
+                                      title="拖拽调整顺序"
+                                      className="flex h-8 w-8 cursor-grab items-center justify-center rounded-full text-stone-400 transition hover:bg-stone-100 hover:text-stone-700 active:cursor-grabbing dark:text-[#5e584f] dark:hover:bg-[#2e2b26] dark:hover:text-[#b5afa6]"
+                                    >
+                                      <GripVertical className="h-4 w-4" />
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                            </article>
+                          )}
+                        </Draggable>
+                      );
+                    })
                   ) : (
                     <div className="rounded-lg border border-dashed border-stone-300 bg-white/60 p-6 text-center text-sm text-stone-400 dark:border-[#4a453e] dark:bg-[#1e1c1a]/60 dark:text-[#5e584f] md:col-span-2 xl:col-span-3">
                       {items.length > 0 ? '没有匹配的物品' : '暂无携带物品'}
@@ -1730,6 +1809,8 @@ function App() {
   const [error, setError] = useState('');
   const [cardForm, setCardForm] = useState(createEmptyCardForm('Day 1'));
   const [packingForm, setPackingForm] = useState(createEmptyPackingForm);
+  const [editingPackingId, setEditingPackingId] = useState('');
+  const [editingPackingForm, setEditingPackingForm] = useState(createEmptyPackingForm);
   const [pendingDeleteId, setPendingDeleteId] = useState('');
   const [editingCardId, setEditingCardId] = useState('');
   const [editForm, setEditForm] = useState(createCardEditForm(initialTripPlan.itinerary['Day 1'][0]));
@@ -1988,6 +2069,8 @@ function App() {
     setPlan(emptyPlan);
     setCardForm(createEmptyCardForm('Day 1'));
     setPackingForm(createEmptyPackingForm());
+    setEditingPackingId('');
+    setEditingPackingForm(createEmptyPackingForm());
     setPendingDeleteId('');
     setEditingCardId('');
     setIsAddFormOpen(false);
@@ -2079,6 +2162,52 @@ function App() {
 
     nextItems.splice(Math.max(0, insertIndex), 0, movingItem);
     setPackingItems(nextItems);
+  };
+
+  const startEditPackingItem = (itemId) => {
+    const item = packingItems.find((i) => i.id === itemId);
+    if (!item) return;
+    setEditingPackingId(itemId);
+    setEditingPackingForm({
+      name: item.name,
+      category: packingCategories.includes(item.category) ? item.category : '其他',
+      quantity: item.quantity || '1',
+      note: item.note || '',
+    });
+  };
+
+  const updateEditingPackingForm = (field, value) => {
+    setEditingPackingForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const savePackingItemEdit = () => {
+    const name = editingPackingForm.name.trim();
+    if (!name) {
+      setError('携带物品需要填写名称。');
+      return;
+    }
+
+    setPackingItems(
+      packingItems.map((item) =>
+        item.id === editingPackingId
+          ? {
+              ...item,
+              name,
+              category: packingCategories.includes(editingPackingForm.category) ? editingPackingForm.category : '其他',
+              quantity: editingPackingForm.quantity.trim() || '1',
+              note: editingPackingForm.note.trim(),
+            }
+          : item,
+      ),
+    );
+    setError('');
+    setEditingPackingId('');
+    setEditingPackingForm(createEmptyPackingForm());
+  };
+
+  const cancelPackingItemEdit = () => {
+    setEditingPackingId('');
+    setEditingPackingForm(createEmptyPackingForm());
   };
 
   const clearPackingFilters = () => {
@@ -2229,6 +2358,8 @@ function App() {
       setPlan(importedPlan);
       setCardForm(createEmptyCardForm(Object.keys(importedPlan.itinerary)[0]));
       setPackingForm(createEmptyPackingForm());
+      setEditingPackingId('');
+      setEditingPackingForm(createEmptyPackingForm());
       setActivePackingCategory('全部');
       setPackingSearchQuery('');
       setPendingDeleteId('');
@@ -2612,6 +2743,12 @@ function App() {
             onToggleItem={togglePackingItem}
             onDeleteItem={deletePackingItem}
             onReorderItems={reorderPackingItems}
+            editingPackingId={editingPackingId}
+            editingPackingForm={editingPackingForm}
+            onStartEditPackingItem={startEditPackingItem}
+            onEditPackingField={updateEditingPackingForm}
+            onSavePackingItemEdit={savePackingItemEdit}
+            onCancelPackingItemEdit={cancelPackingItemEdit}
           />
         </div>
       </div>
