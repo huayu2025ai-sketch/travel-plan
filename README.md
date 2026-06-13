@@ -8,9 +8,10 @@
 
 ## 功能特性
 
-- **AI 行程生成** — 输入旅行想法，调用 DeepSeek API 自动生成带预算、交通、每日安排的行程
+- **AI 行程生成** — 输入旅行想法，调用 DeepSeek API 自动生成带预算、交通、每日安排的行程；支持上下文式优化
 - **拖拽看板** — 支持天数排序、卡片跨天拖拽、同天内重新排序
 - **灵活编辑** — 添加/编辑/删除卡片和天数，实时保存到浏览器本地存储
+- **行李清单** — 添加、勾选、删除、拖拽排序、搜索和筛选行李；点击摘要卡片可平滑滚动到清单
 - **数据导入导出** — JSON 格式备份与恢复
 - **双模式运行** — 开发时用 Vite 内置 API，生产时可独立启动 Express 后端或部署到 Vercel
 
@@ -63,6 +64,7 @@ npm run client
 | `npm run server` | 独立启动 Express API 服务（端口 8787） |
 | `npm run build` | 构建生产版本到 `dist/` |
 | `npm run preview` | 预览生产构建 |
+| `npm test` | 运行 Vitest 测试 |
 
 ---
 
@@ -87,6 +89,18 @@ travel-plan/
 ```
 
 ---
+
+## 测试
+
+```bash
+npm test
+```
+
+测试使用 Vitest，详见 `TESTING.md`。
+
+## 持续集成
+
+仓库已配置 `.github/workflows/test.yml`，每次 push 和 pull_request 都会自动运行 `npm test`。
 
 ## 使用指南
 
