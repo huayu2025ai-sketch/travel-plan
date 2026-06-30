@@ -8,6 +8,10 @@ const schemaPrompt = `请返回如下 JSON 结构：
   "start_date": "2026-10-21",
   "total_budget_estimate": "2500-3000元",
   "recommended_transport": "高铁 + 市内网约车",
+  "weather": {
+    "Day 1": "晴 18-26°C",
+    "Day 2": "多云 16-24°C"
+  },
   "itinerary": {
     "Day 1": [
       {
@@ -26,7 +30,8 @@ const schemaPrompt = `请返回如下 JSON 结构：
 2. itinerary 的 key 必须使用 "Day 1"、"Day 2" 这种格式。
 3. 每个 Day 至少返回数组，可以为空。
 4. id 必须唯一，且适合拖拽组件使用。
-5. 如果上下文中已有当前行程草案，请把用户的新输入理解为对现有草案的优化要求，并返回优化后的完整行程 JSON，不要只返回差异。`;
+5. weather 字段为可选，键与 itinerary 一致，值为包含天气现象和温度范围的简短中文描述，例如 "晴 18-26°C"。
+6. 如果上下文中已有当前行程草案，请把用户的新输入理解为对现有草案的优化要求，并返回优化后的完整行程 JSON，不要只返回差异。`;
 
 const deepseekTimeoutMs = 60000;
 const maxDeepseekAttempts = 2;
@@ -175,6 +180,7 @@ export function normalizePlan(plan) {
 
   const itinerary = plan.itinerary && typeof plan.itinerary === 'object' ? plan.itinerary : {};
   const normalizedItinerary = {};
+  const normalizedWeather = {};
   const seenIds = new Set();
 
   for (const [day, items] of Object.entries(itinerary)) {
@@ -187,10 +193,16 @@ export function normalizePlan(plan) {
     throw new Error('AI 返回内容缺少 itinerary。');
   }
 
+  const weather = plan.weather && typeof plan.weather === 'object' ? plan.weather : {};
+  for (const day of Object.keys(normalizedItinerary)) {
+    normalizedWeather[day] = String(weather[day] || '').trim();
+  }
+
   return {
     start_date: String(plan.start_date || ''),
     total_budget_estimate: String(plan.total_budget_estimate || '待估算'),
     recommended_transport: String(plan.recommended_transport || '待推荐'),
+    weather: normalizedWeather,
     itinerary: normalizedItinerary,
   };
 }

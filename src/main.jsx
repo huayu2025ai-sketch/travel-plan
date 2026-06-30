@@ -36,6 +36,7 @@ const initialTripPlan = {
   start_date: '',
   total_budget_estimate: '2500-3000元',
   recommended_transport: '高铁 + 市内网约车',
+  weather: {},
   packing_items: [
     {
       id: 'packing-id-card',
@@ -505,7 +506,7 @@ function buildPrintHtml(plan) {
             </div>
             ${
               dateInfo.displayText
-                ? `<strong class="${dateInfo.dayType}">${escapeHtml(dateInfo.displayText)}</strong>`
+                ? `<strong class="${dateInfo.dayType}">${escapeHtml(dateInfo.displayText)}${plan.weather?.[day]?.trim() ? ` · ${escapeHtml(plan.weather[day].trim())}` : ''}</strong>`
                 : ''
             }
           </div>
@@ -988,7 +989,9 @@ function getStartDateFromDayDate(day, dayDateValue) {
 
 function getDayHeading(plan, day) {
   const dateInfo = getDayDateInfo(plan.start_date, day);
-  return dateInfo.displayText ? `${day}（${dateInfo.displayText}）` : day;
+  const weather = plan.weather?.[day]?.trim();
+  const datePart = dateInfo.displayText ? `${day}（${dateInfo.displayText}）` : day;
+  return weather ? `${datePart} ${weather}` : datePart;
 }
 
 function normalizeImportedPlan(value) {
@@ -1030,6 +1033,8 @@ function normalizeImportedPlan(value) {
     throw new Error('JSON 中没有可用的 Day 数据。');
   }
 
+  const renumberedItinerary = renumberItineraryDays(normalizedItinerary);
+
   const normalizedPackingItems = Array.isArray(value.packing_items)
     ? value.packing_items.map((item, index) => ({
         id: String(item?.id || `packing-${Date.now()}-${index}`).replace(/[^a-zA-Z0-9-_]/g, '-'),
@@ -1041,12 +1046,19 @@ function normalizeImportedPlan(value) {
       }))
     : [];
 
+  const normalizedWeather = {};
+  const rawWeather = value.weather && typeof value.weather === 'object' ? value.weather : {};
+  for (const day of Object.keys(renumberedItinerary)) {
+    normalizedWeather[day] = String(rawWeather[day] || '').trim();
+  }
+
   return {
     start_date: String(value.start_date || ''),
     total_budget_estimate: getBudgetRange(normalizedItinerary),
     recommended_transport: String(value.recommended_transport || '待推荐'),
+    weather: normalizedWeather,
     packing_items: normalizedPackingItems,
-    itinerary: renumberItineraryDays(normalizedItinerary),
+    itinerary: renumberedItinerary,
   };
 }
 
@@ -1296,6 +1308,7 @@ function DayColumn({
   day,
   items,
   dateInfo,
+  weather,
   totalItems,
   isFilteredView,
   canDeleteDay,
@@ -1340,7 +1353,7 @@ function DayColumn({
           <p className="shrink-0 text-xs font-semibold uppercase tracking-[0.18em] text-stone-400 dark:text-[#5e584f]">行程日</p>
           {dateInfo.displayText ? (
             <span className={`min-w-0 truncate rounded-full px-2 py-0.5 text-xs font-semibold ${getDateBadgeClass(dateInfo)}`}>
-              {dateInfo.displayText}
+              {weather ? `${dateInfo.displayText} ${weather}` : dateInfo.displayText}
             </span>
           ) : null}
         </div>
@@ -2695,6 +2708,7 @@ function App() {
                             day={day}
                             items={items}
                             dateInfo={getDayDateInfo(plan.start_date, day)}
+                            weather={plan.weather?.[day] || ''}
                             totalItems={plan.itinerary[day]?.length || 0}
                             isFilteredView={isFilteredView}
                             canDeleteDay={dayNames.length > 1}

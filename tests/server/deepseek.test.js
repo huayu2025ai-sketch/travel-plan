@@ -47,6 +47,9 @@ describe('generateTravelPlan', () => {
               message: {
                 content: JSON.stringify({
                   start_date: '2026-10-21',
+                  weather: {
+                    'Day 1': '晴 18-26°C',
+                  },
                   itinerary: {
                     'Day 1': [
                       {
@@ -70,6 +73,7 @@ describe('generateTravelPlan', () => {
     const result = await generateTravelPlan('北京五日游', {});
 
     expect(result.start_date).toBe('2026-10-21');
+    expect(result.weather['Day 1']).toBe('晴 18-26°C');
     expect(result.itinerary['Day 1'][0]).toMatchObject({
       id: 'day1-transport',
       type: '交通',
@@ -111,6 +115,7 @@ describe('generateTravelPlan', () => {
     expect(JSON.stringify(requestBody.messages)).toContain('当前行程草案');
     expect(JSON.stringify(requestBody.messages)).toContain('最近沟通记录');
     expect(JSON.stringify(requestBody.messages)).toContain('原计划是什么');
+    expect(JSON.stringify(requestBody.messages)).toContain('weather');
   });
 
   it('retries once on a 5xx response and returns the normalized plan on success', async () => {
@@ -188,6 +193,9 @@ describe('normalizePlan', () => {
       start_date: '2026-10-21',
       total_budget_estimate: '2000元',
       recommended_transport: '高铁',
+      weather: {
+        'Day 1': '晴 18-26°C',
+      },
       itinerary: {
         'Day 1': [
           {
@@ -207,6 +215,9 @@ describe('normalizePlan', () => {
       start_date: '2026-10-21',
       total_budget_estimate: '2000元',
       recommended_transport: '高铁',
+      weather: {
+        'Day 1': '晴 18-26°C',
+      },
       itinerary: {
         'Day 1': [
           {
@@ -229,6 +240,31 @@ describe('normalizePlan', () => {
       },
     });
     expect(result.itinerary['Day 1'][0].type).toBe('景点');
+  });
+
+  it('normalizes missing weather to empty strings per day', () => {
+    const result = normalizePlan({
+      itinerary: {
+        'Day 1': [{ type: '景点', title: '故宫' }],
+        'Day 2': [{ type: '美食', title: '烤鸭' }],
+      },
+    });
+    expect(result.weather['Day 1']).toBe('');
+    expect(result.weather['Day 2']).toBe('');
+  });
+
+  it('ignores weather keys that do not match itinerary days', () => {
+    const result = normalizePlan({
+      weather: {
+        'Day 1': '晴 18-26°C',
+        'Day 9': '雨 12-18°C',
+      },
+      itinerary: {
+        'Day 1': [{ type: '景点', title: '故宫' }],
+      },
+    });
+    expect(result.weather['Day 1']).toBe('晴 18-26°C');
+    expect(result.weather['Day 9']).toBeUndefined();
   });
 
   it('deduplicates item ids', () => {
