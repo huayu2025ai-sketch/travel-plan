@@ -1353,10 +1353,13 @@ function DayColumn({
           <p className="shrink-0 text-xs font-semibold uppercase tracking-[0.18em] text-stone-400 dark:text-[#5e584f]">行程日</p>
           {dateInfo.displayText ? (
             <span className={`min-w-0 truncate rounded-full px-2 py-0.5 text-xs font-semibold ${getDateBadgeClass(dateInfo)}`}>
-              {weather ? `${dateInfo.displayText} ${weather}` : dateInfo.displayText}
+              {dateInfo.displayText}
             </span>
           ) : null}
         </div>
+        {weather ? (
+          <p className="mt-1 truncate text-xs text-stone-500 dark:text-[#7a746c]">{weather}</p>
+        ) : null}
         <div className="mt-1 flex items-center justify-between gap-2">
           <h2 className="min-w-0 truncate font-display text-2xl font-bold text-stone-950 dark:text-[#e8e4df]">{day}</h2>
           <div className="flex shrink-0 items-center gap-1">
