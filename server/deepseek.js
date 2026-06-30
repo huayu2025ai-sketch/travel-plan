@@ -1,7 +1,7 @@
-const allowedTypes = new Set(['交通', '景点', 'citywalk', '美食', '酒店', '娱乐']);
+const allowedTypes = new Set(['交通', '景点', 'citywalk', '美食', '酒店', '娱乐', '工作']);
 
 const systemPrompt =
-  "你是一个专业的旅游规划助手。请根据用户的粗略想法和真实天气参考，生成结构化的旅游计划。你必须严格按照 JSON 格式返回数据，不要包含任何 Markdown 语法标记（如 ```json）。确保每个卡片都有唯一的 'id'，类型(type)只能在['交通', '景点', 'citywalk', '美食', '酒店', '娱乐']中选择。";
+  "你是一个专业的旅游规划助手。请根据用户的粗略想法和真实天气参考，生成结构化的旅游计划。你必须严格按照 JSON 格式返回数据，不要包含任何 Markdown 语法标记（如 ```json）。确保每个卡片都有唯一的 'id'，类型(type)只能在['交通', '景点', 'citywalk', '美食', '酒店', '娱乐', '工作']中选择。";
 
 const extractionSystemPrompt =
   '你是一个旅游信息抽取助手。只返回 JSON，不要输出任何 Markdown 或解释。';

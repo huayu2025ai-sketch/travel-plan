@@ -157,6 +157,7 @@ const typeStyles = {
   美食: 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-400',
   酒店: 'border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-900 dark:bg-violet-950/40 dark:text-violet-400',
   娱乐: 'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-400',
+  工作: 'border-cyan-200 bg-cyan-50 text-cyan-700 dark:border-cyan-900 dark:bg-cyan-950/40 dark:text-cyan-400',
 };
 
 const typeAccent = {
@@ -166,9 +167,10 @@ const typeAccent = {
   美食: 'bg-amber-500',
   酒店: 'bg-violet-500',
   娱乐: 'bg-rose-500',
+  工作: 'bg-cyan-500',
 };
 
-const typeOptions = ['交通', '景点', 'citywalk', '美食', '酒店', '娱乐'];
+const typeOptions = ['交通', '景点', 'citywalk', '美食', '酒店', '娱乐', '工作'];
 const packingCategories = ['证件', '衣物', '洗护', '电子', '药品', '其他'];
 const storageKey = 'travel-plan-board-v1';
 const conversationStorageKey = 'travel-plan-conversation-v1';
@@ -318,7 +320,9 @@ function buildMarkdown(plan) {
   ];
 
   Object.entries(plan.itinerary).forEach(([day, items]) => {
-    lines.push(`## ${getDayHeading(plan, day)}`, '');
+    const dateInfo = getDayDateInfo(plan.start_date, day);
+    const dayHeading = dateInfo.displayText ? `${day}（${dateInfo.displayText}）` : day;
+    lines.push(`## ${dayHeading}`, '');
 
     if (items.length === 0) {
       lines.push('- 暂无行程', '');
@@ -372,6 +376,7 @@ function getPrintTypeMeta(type) {
     美食: { icon: 'F', color: '#d97706', bg: '#fef3c7', label: '美食', imageTitle: '地方风味' },
     酒店: { icon: 'H', color: '#7c3aed', bg: '#ede9fe', label: '酒店', imageTitle: '舒适落脚' },
     娱乐: { icon: 'E', color: '#e11d48', bg: '#ffe4e6', label: '娱乐', imageTitle: '轻松玩乐' },
+    工作: { icon: 'O', color: '#0891b2', bg: '#cffafe', label: '工作', imageTitle: '行程工作' },
   };
 
   return meta[type] || { icon: 'P', color: '#57534e', bg: '#f5f5f4', label: type || '行程', imageTitle: '旅途片刻' };
@@ -421,6 +426,13 @@ function buildGuideImageDataUri(item, day, index) {
       <path d="M142 194 C188 116, 300 116, 354 194" fill="none" stroke="${color}" stroke-width="14" stroke-linecap="round"/>
       <path d="M176 196 L156 228 M320 196 L340 228" stroke="${color}" stroke-width="12" stroke-linecap="round"/>
       <path d="M214 166 L234 186 L274 144" fill="none" stroke="${color}" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+    `,
+    工作: `
+      <rect x="102" y="92" width="248" height="154" rx="16" fill="#ffffff" opacity=".9"/>
+      <path d="M144 92 V70 H310 V92" fill="none" stroke="${color}" stroke-width="12" stroke-linecap="round"/>
+      <rect x="132" y="118" width="184" height="18" rx="9" fill="${color}" opacity=".18"/>
+      <rect x="132" y="154" width="138" height="18" rx="9" fill="${color}" opacity=".28"/>
+      <rect x="132" y="190" width="162" height="18" rx="9" fill="${color}" opacity=".22"/>
     `,
   };
 
@@ -506,11 +518,8 @@ function buildPrintHtml(plan) {
               <span>DAY ${parseDayNumber(day)}</span>
               <h2>${escapeHtml(day)}</h2>
             </div>
-            ${
-              dateInfo.displayText
-                ? `<strong class="${dateInfo.dayType}">${escapeHtml(dateInfo.displayText)}${plan.weather?.[day]?.trim() ? ` · ${escapeHtml(plan.weather[day].trim())}` : ''}</strong>`
-                : ''
-            }
+            ${dateInfo.displayText ? `<strong class="${dateInfo.dayType}">${escapeHtml(dateInfo.displayText)}</strong>` : ''}
+            ${plan.weather?.[day]?.trim() ? `<p class="day-weather ${dateInfo.dayType}">${escapeHtml(plan.weather[day].trim())}</p>` : ''}
           </div>
           ${itemsHtml}
         </section>
@@ -626,6 +635,14 @@ function buildPrintHtml(plan) {
           }
           .day-title strong.weekday { color: #a7f3d0; }
           .day-title strong.weekend { color: #fde68a; }
+          .day-weather {
+            margin: 6px 0 0;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: .01em;
+          }
+          .day-weather.weekday { color: #86efac; }
+          .day-weather.weekend { color: #fcd34d; }
           .itinerary-item {
             display: grid;
             grid-template-columns: 46px 1fr;
@@ -992,9 +1009,8 @@ function getStartDateFromDayDate(day, dayDateValue) {
 
 function getDayHeading(plan, day) {
   const dateInfo = getDayDateInfo(plan.start_date, day);
-  const weather = plan.weather?.[day]?.trim();
   const datePart = dateInfo.displayText ? `${day}（${dateInfo.displayText}）` : day;
-  return weather ? `${datePart} ${weather}` : datePart;
+  return datePart;
 }
 
 function normalizeImportedPlan(value) {
