@@ -2,6 +2,19 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { generateTravelPlan, normalizePlan } from '../../server/deepseek.js';
 
+function createJsonResponse(data, { status = 200, ok = true } = {}) {
+  return {
+    ok,
+    status,
+    text: vi.fn().mockResolvedValue(typeof data === 'string' ? data : JSON.stringify(data)),
+    json: vi.fn().mockResolvedValue(data),
+  };
+}
+
+function getRequestUrl(input) {
+  return typeof input === 'string' ? input : input?.url || input?.href || String(input);
+}
+
 describe('generateTravelPlan', () => {
   beforeEach(() => {
     process.env.DEEPSEEK_API_KEY = 'test-api-key';
@@ -37,36 +50,86 @@ describe('generateTravelPlan', () => {
   it('returns a normalized plan when the API responds with valid JSON', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue({
-        ok: true,
-        status: 200,
-        text: vi.fn().mockResolvedValue(''),
-        json: vi.fn().mockResolvedValue({
-          choices: [
-            {
-              message: {
-                content: JSON.stringify({
-                  start_date: '2026-10-21',
-                  weather: {
-                    'Day 1': '晴 18-26°C',
+      vi.fn().mockImplementation(async (input, options) => {
+        const url = getRequestUrl(input);
+
+        if (url.includes('deepseek.com')) {
+          const requestBody = JSON.parse(options.body);
+          const systemPrompt = requestBody.messages?.[0]?.content || '';
+
+          if (systemPrompt.includes('旅游信息抽取助手')) {
+            return createJsonResponse({
+              choices: [
+                {
+                  message: {
+                    content: JSON.stringify({
+                      destination: '北京',
+                      start_date: '2026-10-21',
+                      days: 1,
+                    }),
                   },
-                  itinerary: {
-                    'Day 1': [
-                      {
-                        id: 'day1-transport',
-                        type: '交通',
-                        title: '高铁',
-                        cost: '360元',
-                        duration: '2.5小时',
-                        advice: '提前订票',
-                      },
-                    ],
-                  },
-                }),
+                },
+              ],
+            });
+          }
+
+          return createJsonResponse({
+            choices: [
+              {
+                message: {
+                  content: JSON.stringify({
+                    destination: '北京',
+                    start_date: '2026-10-21',
+                    weather: {
+                      'Day 1': '阴 0-0°C',
+                    },
+                    itinerary: {
+                      'Day 1': [
+                        {
+                          id: 'day1-transport',
+                          type: '交通',
+                          title: '高铁',
+                          cost: '360元',
+                          duration: '2.5小时',
+                          advice: '提前订票',
+                        },
+                      ],
+                    },
+                  }),
+                },
               },
+            ],
+          });
+        }
+
+        if (url.includes('geocoding-api.open-meteo.com')) {
+          return createJsonResponse({
+            results: [
+              {
+                name: '北京',
+                admin1: '北京市',
+                country: '中国',
+                latitude: 39.9042,
+                longitude: 116.4074,
+              },
+            ],
+          });
+        }
+
+        if (url.includes('api.open-meteo.com/v1/forecast')) {
+          return createJsonResponse({
+            daily: {
+              time: ['2026-10-21'],
+              weather_code: [0],
+              temperature_2m_max: [26],
+              temperature_2m_min: [18],
+              precipitation_probability_max: [10],
+              precipitation_sum: [0],
             },
-          ],
-        }),
+          });
+        }
+
+        throw new Error(`unexpected fetch url: ${url}`);
       }),
     );
 
@@ -74,6 +137,7 @@ describe('generateTravelPlan', () => {
 
     expect(result.start_date).toBe('2026-10-21');
     expect(result.weather['Day 1']).toBe('晴 18-26°C');
+    expect(result.destination).toBe('北京');
     expect(result.itinerary['Day 1'][0]).toMatchObject({
       id: 'day1-transport',
       type: '交通',
@@ -82,27 +146,76 @@ describe('generateTravelPlan', () => {
   });
 
   it('includes the current plan and recent history in the prompt', async () => {
-    const bodyCapture = vi.fn();
+    const requestBodies = [];
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockImplementation((_url, options) => {
-        bodyCapture(JSON.parse(options.body));
-        return Promise.resolve({
-          ok: true,
-          status: 200,
-          text: vi.fn().mockResolvedValue(''),
-          json: vi.fn().mockResolvedValue({
+      vi.fn().mockImplementation(async (input, options) => {
+        const url = getRequestUrl(input);
+
+        if (url.includes('deepseek.com')) {
+          const requestBody = JSON.parse(options.body);
+          requestBodies.push(requestBody);
+          const systemPrompt = requestBody.messages?.[0]?.content || '';
+
+          if (systemPrompt.includes('旅游信息抽取助手')) {
+            return createJsonResponse({
+              choices: [
+                {
+                  message: {
+                    content: JSON.stringify({
+                      destination: '北京',
+                      start_date: '2026-10-21',
+                      days: 1,
+                    }),
+                  },
+                },
+              ],
+            });
+          }
+
+          return createJsonResponse({
             choices: [
               {
                 message: {
                   content: JSON.stringify({
+                    destination: '北京',
+                    start_date: '2026-10-21',
                     itinerary: { 'Day 1': [{ type: '景点', title: '故宫' }] },
                   }),
                 },
               },
             ],
-          }),
-        });
+          });
+        }
+
+        if (url.includes('geocoding-api.open-meteo.com')) {
+          return createJsonResponse({
+            results: [
+              {
+                name: '北京',
+                admin1: '北京市',
+                country: '中国',
+                latitude: 39.9042,
+                longitude: 116.4074,
+              },
+            ],
+          });
+        }
+
+        if (url.includes('api.open-meteo.com/v1/forecast')) {
+          return createJsonResponse({
+            daily: {
+              time: ['2026-10-21'],
+              weather_code: [3],
+              temperature_2m_max: [25],
+              temperature_2m_min: [17],
+              precipitation_probability_max: [20],
+              precipitation_sum: [0],
+            },
+          });
+        }
+
+        throw new Error(`unexpected fetch url: ${url}`);
       }),
     );
 
@@ -111,32 +224,53 @@ describe('generateTravelPlan', () => {
       history: [{ role: 'user', content: '原计划是什么' }],
     });
 
-    const requestBody = bodyCapture.mock.calls[0][0];
+    const requestBody = requestBodies.find((body) => (body.messages?.[0]?.content || '').includes('旅游规划助手'));
+    expect(requestBody).toBeTruthy();
     expect(JSON.stringify(requestBody.messages)).toContain('当前行程草案');
     expect(JSON.stringify(requestBody.messages)).toContain('最近沟通记录');
     expect(JSON.stringify(requestBody.messages)).toContain('原计划是什么');
-    expect(JSON.stringify(requestBody.messages)).toContain('weather');
+    expect(JSON.stringify(requestBody.messages)).toContain('真实天气参考');
   });
 
   it('retries once on a 5xx response and returns the normalized plan on success', async () => {
+    let deepseekCallCount = 0;
     vi.stubGlobal(
       'fetch',
-      vi
-        .fn()
-        .mockResolvedValueOnce({
-          ok: false,
-          status: 500,
-          text: vi.fn().mockResolvedValue('Internal Server Error'),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          status: 200,
-          text: vi.fn().mockResolvedValue(''),
-          json: vi.fn().mockResolvedValue({
+      vi.fn().mockImplementation(async (input, options) => {
+        const url = getRequestUrl(input);
+
+        if (url.includes('deepseek.com')) {
+          const requestBody = JSON.parse(options.body);
+          const systemPrompt = requestBody.messages?.[0]?.content || '';
+
+          if (systemPrompt.includes('旅游信息抽取助手')) {
+            deepseekCallCount += 1;
+            if (deepseekCallCount === 1) {
+              return createJsonResponse('Internal Server Error', { status: 500, ok: false });
+            }
+
+            return createJsonResponse({
+              choices: [
+                {
+                  message: {
+                    content: JSON.stringify({
+                      destination: '北京',
+                      start_date: '2026-10-21',
+                      days: 1,
+                    }),
+                  },
+                },
+              ],
+            });
+          }
+
+          return createJsonResponse({
             choices: [
               {
                 message: {
                   content: JSON.stringify({
+                    destination: '北京',
+                    start_date: '2026-10-21',
                     itinerary: {
                       'Day 1': [{ type: '景点', title: '故宫' }],
                     },
@@ -144,8 +278,38 @@ describe('generateTravelPlan', () => {
                 },
               },
             ],
-          }),
-        }),
+          });
+        }
+
+        if (url.includes('geocoding-api.open-meteo.com')) {
+          return createJsonResponse({
+            results: [
+              {
+                name: '北京',
+                admin1: '北京市',
+                country: '中国',
+                latitude: 39.9042,
+                longitude: 116.4074,
+              },
+            ],
+          });
+        }
+
+        if (url.includes('api.open-meteo.com/v1/forecast')) {
+          return createJsonResponse({
+            daily: {
+              time: ['2026-10-21'],
+              weather_code: [0],
+              temperature_2m_max: [26],
+              temperature_2m_min: [18],
+              precipitation_probability_max: [10],
+              precipitation_sum: [0],
+            },
+          });
+        }
+
+        throw new Error(`unexpected fetch url: ${url}`);
+      }),
     );
 
     const result = await generateTravelPlan('北京', {});

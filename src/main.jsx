@@ -33,6 +33,7 @@ import {
 import './styles.css';
 
 const initialTripPlan = {
+  destination: '',
   start_date: '',
   total_budget_estimate: '2500-3000元',
   recommended_transport: '高铁 + 市内网约车',
@@ -252,6 +253,7 @@ function getBudgetRange(itinerary) {
 function withComputedBudget(plan) {
   return {
     ...plan,
+    destination: plan.destination || '',
     start_date: plan.start_date || '',
     total_budget_estimate: getBudgetRange(plan.itinerary),
   };
@@ -915,6 +917,7 @@ function isInitialDemoPlan(plan) {
 
 function compactPlanForAi(plan) {
   return withComputedBudget({
+    destination: plan.destination || '',
     start_date: plan.start_date || '',
     total_budget_estimate: plan.total_budget_estimate || '',
     recommended_transport: plan.recommended_transport || '待推荐',
@@ -1053,6 +1056,7 @@ function normalizeImportedPlan(value) {
   }
 
   return {
+    destination: String(value.destination || ''),
     start_date: String(value.start_date || ''),
     total_budget_estimate: getBudgetRange(normalizedItinerary),
     recommended_transport: String(value.recommended_transport || '待推荐'),
@@ -2067,6 +2071,7 @@ function App() {
 
   const clearPlan = () => {
     const emptyPlan = {
+      destination: '',
       start_date: '',
       total_budget_estimate: '0-1000元',
       recommended_transport: '待推荐',
