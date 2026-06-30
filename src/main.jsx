@@ -1662,7 +1662,7 @@ function PackingList({
                 <div
                   ref={provided.innerRef}
                   {...provided.droppableProps}
-                  className={`mt-4 grid gap-2 rounded-lg transition md:grid-cols-2 xl:grid-cols-3 ${
+                  className={`mt-4 grid gap-2 rounded-lg transition sm:grid-cols-2 lg:grid-cols-4 ${
                     snapshot.isDraggingOver ? 'bg-white/70 ring-2 ring-stone-300 dark:bg-[#1e1c1a]/70 dark:ring-[#4a453e]' : ''
                   }`}
                 >
@@ -1807,7 +1807,7 @@ function PackingList({
                       );
                     })
                   ) : (
-                    <div className="rounded-lg border border-dashed border-stone-300 bg-white/60 p-6 text-center text-sm text-stone-400 dark:border-[#4a453e] dark:bg-[#1e1c1a]/60 dark:text-[#5e584f] md:col-span-2 xl:col-span-3">
+                    <div className="rounded-lg border border-dashed border-stone-300 bg-white/60 p-6 text-center text-sm text-stone-400 dark:border-[#4a453e] dark:bg-[#1e1c1a]/60 dark:text-[#5e584f] sm:col-span-2 lg:col-span-4">
                       {items.length > 0 ? '没有匹配的物品' : '暂无携带物品'}
                     </div>
                   )}
