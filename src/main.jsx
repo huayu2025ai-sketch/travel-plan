@@ -1861,6 +1861,9 @@ function App() {
   const [conversationHistory, setConversationHistory] = useState(loadStoredConversation);
   const [generationProgress, setGenerationProgress] = useState(0);
   const [generationStageIndex, setGenerationStageIndex] = useState(0);
+  const [lastAiRequest, setLastAiRequest] = useState(null);
+  const [lastAiResponse, setLastAiResponse] = useState(null);
+  const [isAiDebugOpen, setIsAiDebugOpen] = useState(false);
   const packingSectionRef = useRef(null);
   const { theme, setTheme } = useTheme();
   const days = Object.entries(plan.itinerary);
@@ -2032,14 +2035,16 @@ function App() {
     try {
       const requestHistory = conversationHistory.slice(-6);
       const requestPlan = hasCurrentPlanContext ? compactPlanForAi(plan) : null;
+      const requestBody = {
+        idea: trimmedIdea,
+        currentPlan: requestPlan,
+        history: requestHistory,
+      };
+      setLastAiRequest(requestBody);
       const response = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          idea: trimmedIdea,
-          currentPlan: requestPlan,
-          history: requestHistory,
-        }),
+        body: JSON.stringify(requestBody),
       });
       const responseText = await response.text();
       let data;
@@ -2049,6 +2054,8 @@ function App() {
       } catch {
         throw new Error('接口返回的不是 JSON，请检查 Vercel API 路由或环境变量配置。');
       }
+
+      setLastAiResponse(data);
 
       if (!response.ok) {
         throw new Error(data.error || '生成失败，请稍后重试。');
@@ -2117,6 +2124,9 @@ function App() {
     setActivePackingCategory('全部');
     setPackingSearchQuery('');
     setConversationHistory([]);
+    setLastAiRequest(null);
+    setLastAiResponse(null);
+    setIsAiDebugOpen(false);
     setError('');
   };
 
@@ -2458,14 +2468,46 @@ function App() {
                 已保留当前行程和最近沟通上下文，本轮输入会作为优化要求处理。点击清空行程后上下文会一并清除。
               </div>
             ) : null}
-            <button
-              type="submit"
-              disabled={isGenerating}
-              className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-md bg-stone-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-stone-800 disabled:cursor-not-allowed disabled:bg-stone-500 dark:bg-[#e8e4df] dark:text-[#141210] dark:hover:bg-[#d8d4cf] dark:disabled:bg-[#3a3630] dark:disabled:text-[#7a746c]"
-            >
-              {isGenerating ? '正在生成行程' : hasAiContext ? '优化当前行程' : '生成行程草案'}
-              {isGenerating ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
-            </button>
+            <div className="mt-3 flex gap-2">
+              <button
+                type="submit"
+                disabled={isGenerating}
+                className="inline-flex flex-1 items-center justify-center gap-2 rounded-md bg-stone-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-stone-800 disabled:cursor-not-allowed disabled:bg-stone-500 dark:bg-[#e8e4df] dark:text-[#141210] dark:hover:bg-[#d8d4cf] dark:disabled:bg-[#3a3630] dark:disabled:text-[#7a746c]"
+              >
+                {isGenerating ? '正在生成行程' : hasAiContext ? '优化当前行程' : '生成行程草案'}
+                {isGenerating ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
+              </button>
+              {lastAiRequest ? (
+                <button
+                  type="button"
+                  onClick={() => setIsAiDebugOpen((isOpen) => !isOpen)}
+                  aria-expanded={isAiDebugOpen}
+                  aria-label={isAiDebugOpen ? '隐藏请求/响应详情' : '显示请求/响应详情'}
+                  title={isAiDebugOpen ? '隐藏请求/响应详情' : '显示请求/响应详情'}
+                  className="inline-flex shrink-0 items-center justify-center rounded-md border border-stone-200 bg-white px-3 py-3 text-stone-600 transition hover:border-stone-300 hover:bg-stone-50 dark:border-[#3a3630] dark:bg-[#1e1c1a] dark:text-[#9a9389] dark:hover:border-[#5a554e] dark:hover:bg-[#2e2b26]"
+                >
+                  <ChevronDown className={`h-4 w-4 transition ${isAiDebugOpen ? 'rotate-180' : ''}`} />
+                </button>
+              ) : null}
+            </div>
+            {isAiDebugOpen && lastAiRequest ? (
+              <div className="mt-2 space-y-2 rounded-md border border-stone-200 bg-stone-50 p-3 text-xs dark:border-[#3a3630] dark:bg-[#1e1c1a]">
+                <div>
+                  <p className="mb-1 font-semibold text-stone-600 dark:text-[#9a9389]">发送给 DeepSeek 的内容</p>
+                  <pre className="max-h-40 overflow-auto rounded bg-white p-2 text-stone-700 dark:bg-[#252320] dark:text-[#b5afa6]">
+                    {JSON.stringify(lastAiRequest, null, 2)}
+                  </pre>
+                </div>
+                {lastAiResponse ? (
+                  <div>
+                    <p className="mb-1 font-semibold text-stone-600 dark:text-[#9a9389]">DeepSeek 返回的内容</p>
+                    <pre className="max-h-40 overflow-auto rounded bg-white p-2 text-stone-700 dark:bg-[#252320] dark:text-[#b5afa6]">
+                      {JSON.stringify(lastAiResponse, null, 2)}
+                    </pre>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
             <button
               type="button"
               onClick={clearPlan}
