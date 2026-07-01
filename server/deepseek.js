@@ -328,6 +328,7 @@ async function fetchDailyForecast(location, startDate, dayCount) {
     'precipitation_sum',
   ].join(','));
   url.searchParams.set('timezone', 'auto');
+  url.searchParams.set('models', 'cma_grapes_global');
   url.searchParams.set('start_date', startDate);
   url.searchParams.set('end_date', endDate);
 
