@@ -8,11 +8,12 @@
 
 ## 功能特性
 
-- **AI 行程生成** — 输入旅行想法，调用 DeepSeek API 自动生成带预算、交通、每日安排的行程
+- **AI 行程生成** — 输入旅行想法，先抽取目的地与日期，再调用 Open-Meteo 查询真实天气并结合 DeepSeek 生成带预算、交通、每日安排的行程；支持上下文式优化
 - **拖拽看板** — 支持天数排序、卡片跨天拖拽、同天内重新排序
 - **灵活编辑** — 添加/编辑/删除卡片和天数，实时保存到浏览器本地存储
+- **行李清单** — 添加、勾选、删除、拖拽排序、搜索和筛选行李；点击摘要卡片可平滑滚动到清单
 - **数据导入导出** — JSON 格式备份与恢复
-- **双模式运行** — 开发时用 Vite 内置 API，生产时可独立启动 Express 后端
+- **双模式运行** — 开发时用 Vite 内置 API，生产时可独立启动 Express 后端或部署到 Vercel
 
 ---
 
@@ -30,17 +31,21 @@ npm install
 cp .env.example .env
 ```
 
-编辑 `.env`，填入你的 DeepSeek API Key：
+编辑 `.env`，填入你的配置：
 
 ```env
 DEEPSEEK_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+DEEPSEEK_BASE_URL=https://api.deepseek.com
+API_PORT=8787
 ```
 
-> 密钥可在 [DeepSeek 开放平台](https://platform.deepseek.com/) 获取。
+> 密钥可在 [DeepSeek 开放平台](https://platform.deepseek.com/) 获取。`DEEPSEEK_BASE_URL` 通常保持默认即可，如需使用代理或兼容接口可修改。
 
 ### 3. 启动开发服务器
 
 ```bash
+npm run dev
+# 或
 npm run client
 ```
 
@@ -54,10 +59,12 @@ npm run client
 
 | 命令 | 说明 |
 |------|------|
+| `npm run dev` | 启动 Vite 开发服务器（含内置 API，别名） |
 | `npm run client` | 启动 Vite 开发服务器（含内置 API） |
 | `npm run server` | 独立启动 Express API 服务（端口 8787） |
 | `npm run build` | 构建生产版本到 `dist/` |
 | `npm run preview` | 预览生产构建 |
+| `npm test` | 运行 Vitest 测试 |
 
 ---
 
@@ -68,16 +75,32 @@ travel-plan/
 ├── src/
 │   ├── main.jsx          # 主应用入口（React 看板组件）
 │   └── styles.css        # 全局样式与 Tailwind 指令
+├── api/
+│   ├── generate.js       # Vercel Serverless API：生成行程
+│   └── health.js         # Vercel Serverless API：健康检查
 ├── server/
-│   ├── index.js          # Express 独立后端
+│   ├── index.js          # Express 独立后端（复用 api/ 下的 handler）
 │   └── deepseek.js       # DeepSeek API 调用封装
 ├── vite.config.js        # Vite 配置（含开发环境 API 插件）
 ├── tailwind.config.js    # Tailwind CSS 配置
+├── vercel.json           # Vercel 部署配置
 ├── package.json
 └── .env.example          # 环境变量模板
 ```
 
 ---
+
+## 测试
+
+```bash
+npm test
+```
+
+测试使用 Vitest，详见 `TESTING.md`。
+
+## 持续集成
+
+仓库已配置 `.github/workflows/test.yml`，每次 push 和 pull_request 都会自动运行 `npm test`。
 
 ## 使用指南
 
@@ -93,12 +116,36 @@ travel-plan/
 
 ---
 
+## 部署
+
+### Vercel
+
+本项目已配置 `vercel.json`，支持一键部署到 Vercel：
+
+```bash
+npm i -g vercel
+vercel
+```
+
+部署后需在 Vercel Dashboard 中设置环境变量 `DEEPSEEK_API_KEY`。
+
+### 独立服务器
+
+```bash
+npm run build
+npm run server
+```
+
+然后使用 Nginx 等反向代理将前端 `dist/` 目录和 API 端口（默认 8787）统一对外提供服务。
+
+---
+
 ## 技术栈
 
 - **前端**：React 19, Vite 7, Tailwind CSS 3
 - **拖拽**：@hello-pangea/dnd
 - **图标**：Lucide React
-- **后端**：Express 5（可选）
+- **后端**：Express 5（可选独立部署）/ Vercel Serverless Functions
 - **AI**：DeepSeek Chat API
 
 ---

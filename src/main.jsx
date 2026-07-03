@@ -4,6 +4,7 @@ import { DragDropContext, Draggable, Droppable } from '@hello-pangea/dnd';
 import {
   AlertCircle,
   ArrowRight,
+  Backpack,
   Check,
   CalendarDays,
   ChevronDown,
@@ -21,6 +22,7 @@ import {
   Plane,
   Plus,
   Route,
+  Search,
   SlidersHorizontal,
   Sparkles,
   Sun,
@@ -31,9 +33,37 @@ import {
 import './styles.css';
 
 const initialTripPlan = {
+  destination: '',
   start_date: '',
   total_budget_estimate: '2500-3000元',
   recommended_transport: '高铁 + 市内网约车',
+  weather: {},
+  packing_items: [
+    {
+      id: 'packing-id-card',
+      name: '身份证',
+      category: '证件',
+      quantity: '1',
+      packed: false,
+      note: '进站、入住都要用。',
+    },
+    {
+      id: 'packing-power-bank',
+      name: '充电宝',
+      category: '电子',
+      quantity: '1',
+      packed: false,
+      note: '注意容量符合乘车携带要求。',
+    },
+    {
+      id: 'packing-comfort-shoes',
+      name: '舒适步行鞋',
+      category: '衣物',
+      quantity: '1双',
+      packed: false,
+      note: '适合石窟和老城步行。',
+    },
+  ],
   itinerary: {
     'Day 1': [
       {
@@ -127,6 +157,7 @@ const typeStyles = {
   美食: 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-400',
   酒店: 'border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-900 dark:bg-violet-950/40 dark:text-violet-400',
   娱乐: 'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-400',
+  工作: 'border-cyan-200 bg-cyan-50 text-cyan-700 dark:border-cyan-900 dark:bg-cyan-950/40 dark:text-cyan-400',
 };
 
 const typeAccent = {
@@ -136,9 +167,11 @@ const typeAccent = {
   美食: 'bg-amber-500',
   酒店: 'bg-violet-500',
   娱乐: 'bg-rose-500',
+  工作: 'bg-cyan-500',
 };
 
-const typeOptions = ['交通', '景点', 'citywalk', '美食', '酒店', '娱乐'];
+const typeOptions = ['交通', '景点', 'citywalk', '美食', '酒店', '娱乐', '工作'];
+const packingCategories = ['证件', '衣物', '洗护', '电子', '药品', '其他'];
 const storageKey = 'travel-plan-board-v1';
 const conversationStorageKey = 'travel-plan-conversation-v1';
 const themeKey = 'travel-plan-theme';
@@ -176,6 +209,30 @@ function createEmptyCardForm(day) {
   };
 }
 
+function createEmptyPackingForm() {
+  return {
+    name: '',
+    category: '其他',
+    quantity: '1',
+    note: '',
+  };
+}
+
+function getFuzzyMatchScore(text, query) {
+  const source = String(text || '').toLowerCase();
+  const target = String(query || '').trim().toLowerCase();
+  if (!target) return 1;
+  if (source.includes(target)) return 1;
+
+  let targetIndex = 0;
+  for (const char of source) {
+    if (char === target[targetIndex]) targetIndex += 1;
+    if (targetIndex === target.length) return 0.6;
+  }
+
+  return 0;
+}
+
 function parseCostAmount(value) {
   const text = String(value || '').trim();
   if (!text) return null;
@@ -210,6 +267,7 @@ function getBudgetRange(itinerary) {
 function withComputedBudget(plan) {
   return {
     ...plan,
+    destination: plan.destination || '',
     start_date: plan.start_date || '',
     total_budget_estimate: getBudgetRange(plan.itinerary),
   };
@@ -274,7 +332,9 @@ function buildMarkdown(plan) {
   ];
 
   Object.entries(plan.itinerary).forEach(([day, items]) => {
-    lines.push(`## ${getDayHeading(plan, day)}`, '');
+    const dateInfo = getDayDateInfo(plan.start_date, day);
+    const dayHeading = dateInfo.displayText ? `${day}（${dateInfo.displayText}）` : day;
+    lines.push(`## ${dayHeading}`, '');
 
     if (items.length === 0) {
       lines.push('- 暂无行程', '');
@@ -293,6 +353,20 @@ function buildMarkdown(plan) {
       );
     });
   });
+
+  lines.push('## 携带物品', '');
+
+  const packingItems = plan.packing_items || [];
+  if (packingItems.length === 0) {
+    lines.push('- 暂无携带物品记录', '');
+  } else {
+    packingItems.forEach((item) => {
+      const status = item.packed ? '已携带' : '待准备';
+      const detail = [item.category, item.quantity, item.note].filter(Boolean).join(' · ');
+      lines.push(`- [${item.packed ? 'x' : ' '}] ${item.name}（${status}${detail ? ` · ${detail}` : ''}）`);
+    });
+    lines.push('');
+  }
 
   return lines.join('\n');
 }
@@ -314,6 +388,7 @@ function getPrintTypeMeta(type) {
     美食: { icon: 'F', color: '#d97706', bg: '#fef3c7', label: '美食', imageTitle: '地方风味' },
     酒店: { icon: 'H', color: '#7c3aed', bg: '#ede9fe', label: '酒店', imageTitle: '舒适落脚' },
     娱乐: { icon: 'E', color: '#e11d48', bg: '#ffe4e6', label: '娱乐', imageTitle: '轻松玩乐' },
+    工作: { icon: 'O', color: '#0891b2', bg: '#cffafe', label: '工作', imageTitle: '行程工作' },
   };
 
   return meta[type] || { icon: 'P', color: '#57534e', bg: '#f5f5f4', label: type || '行程', imageTitle: '旅途片刻' };
@@ -363,6 +438,13 @@ function buildGuideImageDataUri(item, day, index) {
       <path d="M142 194 C188 116, 300 116, 354 194" fill="none" stroke="${color}" stroke-width="14" stroke-linecap="round"/>
       <path d="M176 196 L156 228 M320 196 L340 228" stroke="${color}" stroke-width="12" stroke-linecap="round"/>
       <path d="M214 166 L234 186 L274 144" fill="none" stroke="${color}" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
+    `,
+    工作: `
+      <rect x="102" y="92" width="248" height="154" rx="16" fill="#ffffff" opacity=".9"/>
+      <path d="M144 92 V70 H310 V92" fill="none" stroke="${color}" stroke-width="12" stroke-linecap="round"/>
+      <rect x="132" y="118" width="184" height="18" rx="9" fill="${color}" opacity=".18"/>
+      <rect x="132" y="154" width="138" height="18" rx="9" fill="${color}" opacity=".28"/>
+      <rect x="132" y="190" width="162" height="18" rx="9" fill="${color}" opacity=".22"/>
     `,
   };
 
@@ -448,11 +530,8 @@ function buildPrintHtml(plan) {
               <span>DAY ${parseDayNumber(day)}</span>
               <h2>${escapeHtml(day)}</h2>
             </div>
-            ${
-              dateInfo.displayText
-                ? `<strong class="${dateInfo.dayType}">${escapeHtml(dateInfo.displayText)}</strong>`
-                : ''
-            }
+            ${dateInfo.displayText ? `<strong class="${dateInfo.dayType}">${escapeHtml(dateInfo.displayText)}</strong>` : ''}
+            ${plan.weather?.[day]?.trim() ? `<p class="day-weather ${dateInfo.dayType}">${escapeHtml(plan.weather[day].trim())}</p>` : ''}
           </div>
           ${itemsHtml}
         </section>
@@ -568,6 +647,14 @@ function buildPrintHtml(plan) {
           }
           .day-title strong.weekday { color: #a7f3d0; }
           .day-title strong.weekend { color: #fde68a; }
+          .day-weather {
+            margin: 6px 0 0;
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: .01em;
+          }
+          .day-weather.weekday { color: #86efac; }
+          .day-weather.weekend { color: #fcd34d; }
           .itinerary-item {
             display: grid;
             grid-template-columns: 46px 1fr;
@@ -858,9 +945,11 @@ function isInitialDemoPlan(plan) {
 
 function compactPlanForAi(plan) {
   return withComputedBudget({
+    destination: plan.destination || '',
     start_date: plan.start_date || '',
     total_budget_estimate: plan.total_budget_estimate || '',
     recommended_transport: plan.recommended_transport || '待推荐',
+    packing_items: plan.packing_items || [],
     itinerary: plan.itinerary,
   });
 }
@@ -931,7 +1020,8 @@ function getStartDateFromDayDate(day, dayDateValue) {
 
 function getDayHeading(plan, day) {
   const dateInfo = getDayDateInfo(plan.start_date, day);
-  return dateInfo.displayText ? `${day}（${dateInfo.displayText}）` : day;
+  const datePart = dateInfo.displayText ? `${day}（${dateInfo.displayText}）` : day;
+  return datePart;
 }
 
 function normalizeImportedPlan(value) {
@@ -973,11 +1063,33 @@ function normalizeImportedPlan(value) {
     throw new Error('JSON 中没有可用的 Day 数据。');
   }
 
+  const renumberedItinerary = renumberItineraryDays(normalizedItinerary);
+
+  const normalizedPackingItems = Array.isArray(value.packing_items)
+    ? value.packing_items.map((item, index) => ({
+        id: String(item?.id || `packing-${Date.now()}-${index}`).replace(/[^a-zA-Z0-9-_]/g, '-'),
+        name: String(item?.name || '未命名物品'),
+        category: packingCategories.includes(item?.category) ? item.category : '其他',
+        quantity: String(item?.quantity || '1'),
+        packed: Boolean(item?.packed),
+        note: String(item?.note || ''),
+      }))
+    : [];
+
+  const normalizedWeather = {};
+  const rawWeather = value.weather && typeof value.weather === 'object' ? value.weather : {};
+  for (const day of Object.keys(renumberedItinerary)) {
+    normalizedWeather[day] = String(rawWeather[day] || '').trim();
+  }
+
   return {
+    destination: String(value.destination || ''),
     start_date: String(value.start_date || ''),
     total_budget_estimate: getBudgetRange(normalizedItinerary),
     recommended_transport: String(value.recommended_transport || '待推荐'),
-    itinerary: renumberItineraryDays(normalizedItinerary),
+    weather: normalizedWeather,
+    packing_items: normalizedPackingItems,
+    itinerary: renumberedItinerary,
   };
 }
 
@@ -1229,6 +1341,7 @@ function DayColumn({
   day,
   items,
   dateInfo,
+  weather,
   totalItems,
   isFilteredView,
   canDeleteDay,
@@ -1277,6 +1390,9 @@ function DayColumn({
             </span>
           ) : null}
         </div>
+        {weather ? (
+          <p className="mt-1 truncate text-xs text-stone-500 dark:text-[#7a746c]">{weather}</p>
+        ) : null}
         <div className="mt-1 flex items-center justify-between gap-2">
           <h2 className="min-w-0 truncate font-display text-2xl font-black tracking-tight text-stone-950 dark:text-[#e8e4df]">{day}</h2>
           <div className="flex shrink-0 items-center gap-1">
@@ -1401,22 +1517,372 @@ function DayColumn({
   );
 }
 
+function PackingList({
+  items,
+  form,
+  isCollapsed,
+  activeCategory,
+  searchQuery,
+  editingPackingId,
+  editingPackingForm,
+  onFormField,
+  onAddItem,
+  onToggleCollapsed,
+  onCategoryFilter,
+  onSearchQuery,
+  onClearFilters,
+  onToggleItem,
+  onDeleteItem,
+  onReorderItems,
+  onStartEditPackingItem,
+  onEditPackingField,
+  onSavePackingItemEdit,
+  onCancelPackingItemEdit,
+}) {
+  const packedCount = items.filter((item) => item.packed).length;
+  const progress = items.length ? Math.round((packedCount / items.length) * 100) : 0;
+  const filteredItems = items.filter((item) => {
+    const categoryMatches = activeCategory === '全部' || item.category === activeCategory;
+    const nameMatches = getFuzzyMatchScore(item.name, searchQuery) > 0;
+    return categoryMatches && nameMatches;
+  });
+  const isFiltered = activeCategory !== '全部' || Boolean(searchQuery.trim());
+
+  const handleDragEnd = (result) => {
+    if (!result.destination) return;
+    onReorderItems(result.source.index, result.destination.index, filteredItems);
+  };
+
+  return (
+    <section className="mt-5 rounded-lg border border-stone-200 bg-white/82 p-4 shadow-soft backdrop-blur transition dark:border-[#3a3630] dark:bg-[#1e1c1a]/82 dark:shadow-soft-dark">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-stone-400 dark:text-[#5e584f]">Packing List</p>
+          <div className="mt-1 flex items-center gap-2">
+            <h2 className="text-lg font-bold text-stone-950 dark:text-[#e8e4df]">携带物品记录</h2>
+            <button
+              type="button"
+              onClick={onToggleCollapsed}
+              aria-expanded={!isCollapsed}
+              aria-label={isCollapsed ? '展开携带物品记录' : '收起携带物品记录'}
+              title={isCollapsed ? '展开携带物品记录' : '收起携带物品记录'}
+              className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-stone-200 bg-white text-stone-500 transition hover:border-stone-300 hover:bg-stone-50 hover:text-stone-700 dark:border-[#3a3630] dark:bg-[#1e1c1a] dark:text-[#7a746c] dark:hover:border-[#5a554e] dark:hover:bg-[#2e2b26] dark:hover:text-[#b5afa6]"
+            >
+              <ChevronDown className={`h-3.5 w-3.5 transition ${isCollapsed ? '-rotate-90' : ''}`} />
+            </button>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="min-w-[180px] rounded-lg border border-stone-200 bg-stone-50 p-3 dark:border-[#3a3630] dark:bg-[#252320]">
+            <div className="flex items-center justify-between gap-3 text-xs font-semibold text-stone-600 dark:text-[#9a9389]">
+              <span>{packedCount}/{items.length} 已携带</span>
+              <span>{progress}%</span>
+            </div>
+            <div className="mt-2 h-2 overflow-hidden rounded-full bg-white dark:bg-[#1e1c1a]">
+              <div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${progress}%` }} />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {isCollapsed ? null : (
+        <>
+          <div className="mt-4 flex flex-wrap items-center gap-2 rounded-lg border border-stone-200 bg-white/75 p-3 transition dark:border-[#3a3630] dark:bg-[#1e1c1a]/75">
+            <div className="mr-1 inline-flex items-center gap-2 text-xs font-semibold text-stone-500 dark:text-[#7a746c]">
+              <SlidersHorizontal className="h-4 w-4" />
+              物品筛选
+            </div>
+            <button
+              type="button"
+              onClick={() => onCategoryFilter('全部')}
+              className={`inline-flex items-center rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                activeCategory === '全部'
+                  ? 'border-stone-950 bg-stone-950 text-white dark:border-[#e8e4df] dark:bg-[#e8e4df] dark:text-[#141210]'
+                  : 'border-stone-200 bg-white text-stone-600 hover:bg-stone-50 dark:border-[#3a3630] dark:bg-[#1e1c1a] dark:text-[#9a9389] dark:hover:bg-[#2e2b26]'
+              }`}
+            >
+              全部 {items.length}
+            </button>
+            {packingCategories.map((category) => {
+              const categoryCount = items.filter((item) => item.category === category).length;
+              return (
+                <button
+                  key={category}
+                  type="button"
+                  onClick={() => onCategoryFilter(category)}
+                  className={`inline-flex items-center rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                    activeCategory === category
+                      ? 'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900/60 dark:bg-rose-950/30 dark:text-rose-300'
+                      : 'border-stone-200 bg-white text-stone-500 hover:bg-stone-50 dark:border-[#3a3630] dark:bg-[#1e1c1a] dark:text-[#7a746c] dark:hover:bg-[#2e2b26]'
+                  }`}
+                  aria-pressed={activeCategory === category}
+                >
+                  {category} {categoryCount}
+                </button>
+              );
+            })}
+            <label className="relative ml-auto min-w-[200px] flex-1 sm:max-w-xs">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400 dark:text-[#7a746c]" />
+              <input
+                value={searchQuery}
+                onChange={(event) => onSearchQuery(event.target.value)}
+                className="h-9 w-full rounded-full border border-stone-200 bg-white pl-9 pr-3 text-sm text-stone-700 outline-none transition placeholder:text-stone-400 focus:border-stone-400 dark:border-[#3a3630] dark:bg-[#2a2724] dark:text-[#b5afa6] dark:placeholder:text-[#5e584f] dark:focus:border-[#5a554e]"
+                placeholder="按名称模糊搜索"
+              />
+            </label>
+            {isFiltered ? (
+              <button
+                type="button"
+                onClick={onClearFilters}
+                className="inline-flex h-9 items-center justify-center rounded-full border border-stone-200 bg-white px-3 text-xs font-semibold text-stone-500 transition hover:bg-stone-50 dark:border-[#3a3630] dark:bg-[#1e1c1a] dark:text-[#9a9389] dark:hover:bg-[#2e2b26]"
+              >
+                清除
+              </button>
+            ) : null}
+          </div>
+
+          {isFiltered ? (
+            <p className="mt-2 text-xs font-medium text-stone-500 dark:text-[#7a746c]">
+              当前显示 {filteredItems.length}/{items.length} 件，拖动会调整可见物品在完整清单中的顺序。
+            </p>
+          ) : null}
+
+          <form
+            onSubmit={onAddItem}
+            className="mt-4 grid gap-2 rounded-lg border border-stone-200 bg-white/70 p-3 transition dark:border-[#3a3630] dark:bg-[#1e1c1a]/70 md:grid-cols-[130px_minmax(150px,1fr)_120px_minmax(180px,1.2fr)_auto]"
+          >
+            <select
+              value={form.category}
+              onChange={(event) => onFormField('category', event.target.value)}
+              className="h-10 rounded-md border border-stone-200 bg-white px-3 text-sm text-stone-700 outline-none transition focus:border-stone-400 dark:border-[#3a3630] dark:bg-[#2a2724] dark:text-[#b5afa6] dark:focus:border-[#5a554e]"
+              aria-label="物品分类"
+            >
+              {packingCategories.map((category) => (
+                <option key={category} value={category}>
+                  {category}
+                </option>
+              ))}
+            </select>
+            <input
+              value={form.name}
+              onChange={(event) => onFormField('name', event.target.value)}
+              className="h-10 rounded-md border border-stone-200 bg-white px-3 text-sm text-stone-700 outline-none transition placeholder:text-stone-400 focus:border-stone-400 dark:border-[#3a3630] dark:bg-[#2a2724] dark:text-[#b5afa6] dark:placeholder:text-[#5e584f] dark:focus:border-[#5a554e]"
+              placeholder="物品名称"
+            />
+            <input
+              value={form.quantity}
+              onChange={(event) => onFormField('quantity', event.target.value)}
+              className="h-10 rounded-md border border-stone-200 bg-white px-3 text-sm text-stone-700 outline-none transition placeholder:text-stone-400 focus:border-stone-400 dark:border-[#3a3630] dark:bg-[#2a2724] dark:text-[#b5afa6] dark:placeholder:text-[#5e584f] dark:focus:border-[#5a554e]"
+              placeholder="数量"
+            />
+            <input
+              value={form.note}
+              onChange={(event) => onFormField('note', event.target.value)}
+              className="h-10 rounded-md border border-stone-200 bg-white px-3 text-sm text-stone-700 outline-none transition placeholder:text-stone-400 focus:border-stone-400 dark:border-[#3a3630] dark:bg-[#2a2724] dark:text-[#b5afa6] dark:placeholder:text-[#5e584f] dark:focus:border-[#5a554e]"
+              placeholder="备注"
+            />
+            <button
+              type="submit"
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-stone-950 px-4 text-sm font-semibold text-white transition hover:bg-stone-800 dark:bg-[#e8e4df] dark:text-[#141210] dark:hover:bg-[#d8d4cf]"
+            >
+              <Plus className="h-4 w-4" />
+              添加
+            </button>
+          </form>
+
+          <DragDropContext onDragEnd={handleDragEnd}>
+            <Droppable droppableId="packing-list" type="PACKING">
+              {(provided, snapshot) => (
+                <div
+                  ref={provided.innerRef}
+                  {...provided.droppableProps}
+                  className={`mt-4 grid gap-2 rounded-lg transition sm:grid-cols-2 lg:grid-cols-4 ${
+                    snapshot.isDraggingOver ? 'bg-white/70 ring-2 ring-stone-300 dark:bg-[#1e1c1a]/70 dark:ring-[#4a453e]' : ''
+                  }`}
+                >
+                  {filteredItems.length > 0 ? (
+                    filteredItems.map((item, index) => {
+                      const isEditing = editingPackingId === item.id;
+                      return (
+                        <Draggable
+                          key={item.id}
+                          draggableId={`packing-${item.id}`}
+                          index={index}
+                          isDragDisabled={isEditing}
+                        >
+                          {(dragProvided, dragSnapshot) => (
+                            <article
+                              ref={dragProvided.innerRef}
+                              {...dragProvided.draggableProps}
+                              style={dragProvided.draggableProps.style}
+                              className={`rounded-lg border p-3 transition ${
+                                dragSnapshot.isDragging
+                                  ? 'border-stone-400 shadow-card ring-2 ring-stone-300 dark:border-[#5a554e] dark:ring-[#4a453e] dark:shadow-card-dark'
+                                  : item.packed
+                                    ? 'border-emerald-200 bg-emerald-50/80 dark:border-emerald-900/50 dark:bg-emerald-950/20'
+                                    : 'border-stone-200 bg-white/80 dark:border-[#3a3630] dark:bg-[#252320]'
+                              }`}
+                            >
+                              {isEditing ? (
+                                <div className="space-y-2">
+                                  <div className="grid gap-2 sm:grid-cols-[130px_1fr_100px]">
+                                    <select
+                                      value={editingPackingForm.category}
+                                      onChange={(event) => onEditPackingField('category', event.target.value)}
+                                      className="h-9 rounded-md border border-stone-200 bg-white px-2 text-sm text-stone-700 outline-none transition focus:border-stone-400 dark:border-[#3a3630] dark:bg-[#2a2724] dark:text-[#b5afa6] dark:focus:border-[#5a554e]"
+                                      aria-label="编辑分类"
+                                    >
+                                      {packingCategories.map((category) => (
+                                        <option key={category} value={category}>
+                                          {category}
+                                        </option>
+                                      ))}
+                                    </select>
+                                    <input
+                                      value={editingPackingForm.name}
+                                      onChange={(event) => onEditPackingField('name', event.target.value)}
+                                      className="h-9 rounded-md border border-stone-200 bg-white px-2 text-sm text-stone-700 outline-none transition placeholder:text-stone-400 focus:border-stone-400 dark:border-[#3a3630] dark:bg-[#2a2724] dark:text-[#b5afa6] dark:placeholder:text-[#5e584f] dark:focus:border-[#5a554e]"
+                                      placeholder="物品名称"
+                                    />
+                                    <input
+                                      value={editingPackingForm.quantity}
+                                      onChange={(event) => onEditPackingField('quantity', event.target.value)}
+                                      className="h-9 rounded-md border border-stone-200 bg-white px-2 text-sm text-stone-700 outline-none transition placeholder:text-stone-400 focus:border-stone-400 dark:border-[#3a3630] dark:bg-[#2a2724] dark:text-[#b5afa6] dark:placeholder:text-[#5e584f] dark:focus:border-[#5a554e]"
+                                      placeholder="数量"
+                                    />
+                                  </div>
+                                  <input
+                                    value={editingPackingForm.note}
+                                    onChange={(event) => onEditPackingField('note', event.target.value)}
+                                    className="h-9 w-full rounded-md border border-stone-200 bg-white px-2 text-sm text-stone-700 outline-none transition placeholder:text-stone-400 focus:border-stone-400 dark:border-[#3a3630] dark:bg-[#2a2724] dark:text-[#b5afa6] dark:placeholder:text-[#5e584f] dark:focus:border-[#5a554e]"
+                                    placeholder="备注"
+                                  />
+                                  <div className="flex gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={onSavePackingItemEdit}
+                                      className="inline-flex h-8 flex-1 items-center justify-center gap-1 rounded-md bg-stone-950 px-2 text-xs font-semibold text-white transition hover:bg-stone-800 dark:bg-[#e8e4df] dark:text-[#141210] dark:hover:bg-[#d8d4cf]"
+                                    >
+                                      <Check className="h-3.5 w-3.5" />
+                                      保存
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={onCancelPackingItemEdit}
+                                      className="inline-flex h-8 flex-1 items-center justify-center gap-1 rounded-md border border-stone-200 bg-white px-2 text-xs font-semibold text-stone-700 transition hover:bg-stone-100 dark:border-[#3a3630] dark:bg-[#1e1c1a] dark:text-[#b5afa6] dark:hover:bg-[#2e2b26]"
+                                    >
+                                      <X className="h-3.5 w-3.5" />
+                                      取消
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="flex items-start gap-3">
+                                  <button
+                                    type="button"
+                                    onClick={() => onToggleItem(item.id)}
+                                    aria-label={item.packed ? `取消携带 ${item.name}` : `标记已携带 ${item.name}`}
+                                    className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border transition ${
+                                      item.packed
+                                        ? 'border-emerald-600 bg-emerald-600 text-white'
+                                        : 'border-stone-300 bg-white text-transparent hover:border-emerald-500 dark:border-[#5a554e] dark:bg-[#1e1c1a]'
+                                    }`}
+                                  >
+                                    <Check className="h-3.5 w-3.5" />
+                                  </button>
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex min-w-0 items-center gap-2">
+                                      <h3 className={`truncate text-sm font-semibold ${item.packed ? 'text-emerald-900 line-through decoration-emerald-500/60 dark:text-emerald-200' : 'text-stone-950 dark:text-[#e8e4df]'}`}>
+                                        {item.name}
+                                      </h3>
+                                      <span className="shrink-0 rounded-full border border-stone-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-stone-500 dark:border-[#3a3630] dark:bg-[#1e1c1a] dark:text-[#9a9389]">
+                                        {item.category}
+                                      </span>
+                                    </div>
+                                    <p className="mt-1 text-xs font-medium text-stone-500 dark:text-[#7a746c]">
+                                      数量：{item.quantity || '1'}
+                                    </p>
+                                    {item.note ? (
+                                      <p className="mt-2 text-sm leading-5 text-stone-600 dark:text-[#9a9389]">{item.note}</p>
+                                    ) : null}
+                                  </div>
+                                  <div className="flex shrink-0 items-center gap-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => onStartEditPackingItem(item.id)}
+                                      aria-label={`编辑 ${item.name}`}
+                                      className="flex h-8 w-8 items-center justify-center rounded-full text-stone-400 transition hover:bg-stone-100 hover:text-stone-700 dark:text-[#5e584f] dark:hover:bg-[#2e2b26] dark:hover:text-[#b5afa6]"
+                                    >
+                                      <Pencil className="h-4 w-4" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => onDeleteItem(item.id)}
+                                      aria-label={`删除 ${item.name}`}
+                                      className="flex h-8 w-8 items-center justify-center rounded-full text-stone-400 transition hover:bg-red-50 hover:text-red-600 dark:text-[#5e584f] dark:hover:bg-red-950/30 dark:hover:text-red-400"
+                                    >
+                                      <Trash2 className="h-4 w-4" />
+                                    </button>
+                                    <div
+                                      {...dragProvided.dragHandleProps}
+                                      role="button"
+                                      aria-label={`拖拽 ${item.name}`}
+                                      title="拖拽调整顺序"
+                                      className="flex h-8 w-8 cursor-grab items-center justify-center rounded-full text-stone-400 transition hover:bg-stone-100 hover:text-stone-700 active:cursor-grabbing dark:text-[#5e584f] dark:hover:bg-[#2e2b26] dark:hover:text-[#b5afa6]"
+                                    >
+                                      <GripVertical className="h-4 w-4" />
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+                            </article>
+                          )}
+                        </Draggable>
+                      );
+                    })
+                  ) : (
+                    <div className="rounded-lg border border-dashed border-stone-300 bg-white/60 p-6 text-center text-sm text-stone-400 dark:border-[#4a453e] dark:bg-[#1e1c1a]/60 dark:text-[#5e584f] sm:col-span-2 lg:col-span-4">
+                      {items.length > 0 ? '没有匹配的物品' : '暂无携带物品'}
+                    </div>
+                  )}
+                  {provided.placeholder}
+                </div>
+              )}
+            </Droppable>
+          </DragDropContext>
+        </>
+      )}
+    </section>
+  );
+}
+
 function App() {
   const [plan, setPlan] = useState(loadStoredPlan);
   const [idea, setIdea] = useState('我想去洛阳、开封旅游，在10月下旬，5天。预算大概多少，交通工具。');
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState('');
   const [cardForm, setCardForm] = useState(createEmptyCardForm('Day 1'));
+  const [packingForm, setPackingForm] = useState(createEmptyPackingForm);
+  const [editingPackingId, setEditingPackingId] = useState('');
+  const [editingPackingForm, setEditingPackingForm] = useState(createEmptyPackingForm);
   const [pendingDeleteId, setPendingDeleteId] = useState('');
   const [editingCardId, setEditingCardId] = useState('');
   const [editForm, setEditForm] = useState(createCardEditForm(initialTripPlan.itinerary['Day 1'][0]));
   const [importInputKey, setImportInputKey] = useState(0);
   const [isAddFormOpen, setIsAddFormOpen] = useState(false);
+  const [isPackingCollapsed, setIsPackingCollapsed] = useState(false);
+  const [isBoardCollapsed, setIsBoardCollapsed] = useState(false);
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
   const [activeTypes, setActiveTypes] = useState(typeOptions);
+  const [activePackingCategory, setActivePackingCategory] = useState('全部');
+  const [packingSearchQuery, setPackingSearchQuery] = useState('');
   const [conversationHistory, setConversationHistory] = useState(loadStoredConversation);
   const [generationProgress, setGenerationProgress] = useState(0);
   const [generationStageIndex, setGenerationStageIndex] = useState(0);
+  const [lastAiRequest, setLastAiRequest] = useState(null);
+  const [lastAiResponse, setLastAiResponse] = useState(null);
+  const [isAiDebugOpen, setIsAiDebugOpen] = useState(false);
+  const packingSectionRef = useRef(null);
   const { theme, setTheme } = useTheme();
   const days = Object.entries(plan.itinerary);
   const dayNames = Object.keys(plan.itinerary);
@@ -1428,6 +1894,8 @@ function App() {
   const visibleTypeSet = new Set(activeTypes);
   const visibleDays = days.map(([day, items]) => [day, isFilteredView ? items.filter((item) => visibleTypeSet.has(item.type)) : items]);
   const visibleItemCount = visibleDays.reduce((total, [, items]) => total + items.length, 0);
+  const packingItems = plan.packing_items || [];
+  const packedItemCount = packingItems.filter((item) => item.packed).length;
   const typeCounts = typeOptions.reduce((counts, type) => {
     counts[type] = getAllItems(plan.itinerary).filter((item) => item.type === type).length;
     return counts;
@@ -1477,6 +1945,10 @@ function App() {
 
   const setItinerary = (nextItinerary) => {
     setPlan((currentPlan) => ({ ...currentPlan, itinerary: nextItinerary }));
+  };
+
+  const setPackingItems = (nextItems) => {
+    setPlan((currentPlan) => ({ ...currentPlan, packing_items: nextItems }));
   };
 
   const setDayDate = (day, dayDateValue) => {
@@ -1581,14 +2053,16 @@ function App() {
     try {
       const requestHistory = conversationHistory.slice(-6);
       const requestPlan = hasCurrentPlanContext ? compactPlanForAi(plan) : null;
+      const requestBody = {
+        idea: trimmedIdea,
+        currentPlan: requestPlan,
+        history: requestHistory,
+      };
+      setLastAiRequest(requestBody);
       const response = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          idea: trimmedIdea,
-          currentPlan: requestPlan,
-          history: requestHistory,
-        }),
+        body: JSON.stringify(requestBody),
       });
       const responseText = await response.text();
       let data;
@@ -1599,23 +2073,29 @@ function App() {
         throw new Error('接口返回的不是 JSON，请检查 Vercel API 路由或环境变量配置。');
       }
 
+      setLastAiResponse(data);
+
       if (!response.ok) {
         throw new Error(data.error || '生成失败，请稍后重试。');
       }
 
       const generatedPlan = normalizeImportedPlan(data);
-      setPlan(generatedPlan);
+      const nextPlan = {
+        ...generatedPlan,
+        packing_items: Array.isArray(data.packing_items) ? generatedPlan.packing_items : packingItems,
+      };
+      setPlan(nextPlan);
       setConversationHistory((currentHistory) =>
         [
           ...currentHistory,
           { role: 'user', content: trimmedIdea },
           {
             role: 'assistant',
-            content: `已生成/优化 ${Object.keys(generatedPlan.itinerary).length} 天、${getAllItems(generatedPlan.itinerary).length} 项行程。`,
+            content: `已生成/优化 ${Object.keys(nextPlan.itinerary).length} 天、${getAllItems(nextPlan.itinerary).length} 项行程。`,
           },
         ].slice(-8),
       );
-      setCardForm(createEmptyCardForm(Object.keys(generatedPlan.itinerary)[0] || 'Day 1'));
+      setCardForm(createEmptyCardForm(Object.keys(nextPlan.itinerary)[0] || 'Day 1'));
       setEditingCardId('');
       setPendingDeleteId('');
       setGenerationProgress(100);
@@ -1632,9 +2112,11 @@ function App() {
 
   const clearPlan = () => {
     const emptyPlan = {
+      destination: '',
       start_date: '',
       total_budget_estimate: '0-1000元',
       recommended_transport: '待推荐',
+      packing_items: [],
       itinerary: { 'Day 1': [] },
     };
 
@@ -1648,11 +2130,21 @@ function App() {
     setIdea('');
     setPlan(emptyPlan);
     setCardForm(createEmptyCardForm('Day 1'));
+    setPackingForm(createEmptyPackingForm());
+    setEditingPackingId('');
+    setEditingPackingForm(createEmptyPackingForm());
     setPendingDeleteId('');
     setEditingCardId('');
     setIsAddFormOpen(false);
+    setIsPackingCollapsed(false);
+    setIsBoardCollapsed(false);
     setActiveTypes(typeOptions);
+    setActivePackingCategory('全部');
+    setPackingSearchQuery('');
     setConversationHistory([]);
+    setLastAiRequest(null);
+    setLastAiResponse(null);
+    setIsAiDebugOpen(false);
     setError('');
   };
 
@@ -1682,6 +2174,117 @@ function App() {
     });
     setCardForm(createEmptyCardForm(targetDay));
     setIsAddFormOpen(false);
+  };
+
+  const updatePackingForm = (field, value) => {
+    setPackingForm((currentForm) => ({ ...currentForm, [field]: value }));
+  };
+
+  const addPackingItem = (event) => {
+    event.preventDefault();
+    const name = packingForm.name.trim();
+
+    if (!name) {
+      setError('携带物品需要填写名称。');
+      return;
+    }
+
+    const newItem = {
+      id: `packing-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      name,
+      category: packingCategories.includes(packingForm.category) ? packingForm.category : '其他',
+      quantity: packingForm.quantity.trim() || '1',
+      packed: false,
+      note: packingForm.note.trim(),
+    };
+
+    setError('');
+    setPackingItems([...packingItems, newItem]);
+    setPackingForm(createEmptyPackingForm());
+  };
+
+  const togglePackingItem = (itemId) => {
+    setPackingItems(packingItems.map((item) => (item.id === itemId ? { ...item, packed: !item.packed } : item)));
+  };
+
+  const deletePackingItem = (itemId) => {
+    setPackingItems(packingItems.filter((item) => item.id !== itemId));
+  };
+
+  const reorderPackingItems = (sourceIndex, destinationIndex, visibleItems) => {
+    const movingItem = visibleItems[sourceIndex];
+    if (!movingItem || sourceIndex === destinationIndex) return;
+
+    const visibleItemsWithoutMoving = visibleItems.filter((item) => item.id !== movingItem.id);
+    const nextItems = packingItems.filter((item) => item.id !== movingItem.id);
+    const anchorItem = visibleItemsWithoutMoving[destinationIndex];
+    const lastVisibleItem = visibleItemsWithoutMoving[visibleItemsWithoutMoving.length - 1];
+    const insertIndex = anchorItem
+      ? nextItems.findIndex((item) => item.id === anchorItem.id)
+      : lastVisibleItem
+        ? nextItems.findIndex((item) => item.id === lastVisibleItem.id) + 1
+        : nextItems.length;
+
+    nextItems.splice(Math.max(0, insertIndex), 0, movingItem);
+    setPackingItems(nextItems);
+  };
+
+  const startEditPackingItem = (itemId) => {
+    const item = packingItems.find((i) => i.id === itemId);
+    if (!item) return;
+    setEditingPackingId(itemId);
+    setEditingPackingForm({
+      name: item.name,
+      category: packingCategories.includes(item.category) ? item.category : '其他',
+      quantity: item.quantity || '1',
+      note: item.note || '',
+    });
+  };
+
+  const updateEditingPackingForm = (field, value) => {
+    setEditingPackingForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  const savePackingItemEdit = () => {
+    const name = editingPackingForm.name.trim();
+    if (!name) {
+      setError('携带物品需要填写名称。');
+      return;
+    }
+
+    setPackingItems(
+      packingItems.map((item) =>
+        item.id === editingPackingId
+          ? {
+              ...item,
+              name,
+              category: packingCategories.includes(editingPackingForm.category) ? editingPackingForm.category : '其他',
+              quantity: editingPackingForm.quantity.trim() || '1',
+              note: editingPackingForm.note.trim(),
+            }
+          : item,
+      ),
+    );
+    setError('');
+    setEditingPackingId('');
+    setEditingPackingForm(createEmptyPackingForm());
+  };
+
+  const cancelPackingItemEdit = () => {
+    setEditingPackingId('');
+    setEditingPackingForm(createEmptyPackingForm());
+  };
+
+  const clearPackingFilters = () => {
+    setActivePackingCategory('全部');
+    setPackingSearchQuery('');
+  };
+
+  const scrollToPackingList = () => {
+    setIsPackingCollapsed(false);
+    window.requestAnimationFrame(() => {
+      packingSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
   };
 
   const deleteCard = (day, cardId) => {
@@ -1819,6 +2422,11 @@ function App() {
       const importedPlan = normalizeImportedPlan(JSON.parse(content));
       setPlan(importedPlan);
       setCardForm(createEmptyCardForm(Object.keys(importedPlan.itinerary)[0]));
+      setPackingForm(createEmptyPackingForm());
+      setEditingPackingId('');
+      setEditingPackingForm(createEmptyPackingForm());
+      setActivePackingCategory('全部');
+      setPackingSearchQuery('');
       setPendingDeleteId('');
       setEditingCardId('');
       setError('');
@@ -1846,14 +2454,14 @@ function App() {
               <br className="hidden sm:block" />
               可调整的每日行程
             </h1>
-            <p className="mt-3 max-w-2xl text-sm leading-relaxed text-stone-500 dark:text-[#8a847b] md:text-[15px]">
-              输入旅行想法后生成结构化行程，也可以继续输入优化要求，AI 会带入当前草案上下文。
+            <p className="mt-3 max-w-3xl text-sm leading-6 text-stone-600 dark:text-[#9a9389] md:text-base">
+              输入旅行想法后生成结构化 JSON，也可以继续输入优化要求，AI 会带入当前草案上下文。
             </p>
           </div>
 
           <form onSubmit={generatePlan} className="rounded-xl border border-stone-200/80 bg-[#fbfaf7]/90 p-3.5 backdrop-blur transition-all duration-300 dark:border-[#3a3630]/80 dark:bg-[#252320]/90">
             <div className="flex items-center justify-between">
-              <label htmlFor="trip-idea" className="text-sm font-bold text-stone-800 dark:text-[#c4bdb4]">
+              <label htmlFor="trip-idea" className="text-sm font-semibold text-stone-800 dark:text-[#c4bdb4]">
                 {hasAiContext ? '继续优化' : '旅行想法'}
               </label>
               <ThemeToggle theme={theme} setTheme={setTheme} />
@@ -1879,14 +2487,46 @@ function App() {
                 已保留当前行程和最近沟通上下文，本轮输入会作为优化要求处理。点击清空行程后上下文会一并清除。
               </div>
             ) : null}
-            <button
-              type="submit"
-              disabled={isGenerating}
-              className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-stone-950 px-4 py-3 text-sm font-bold text-white shadow-sm transition-all duration-200 hover:bg-stone-800 hover:shadow-md disabled:cursor-not-allowed disabled:bg-stone-400 dark:bg-[#e8e4df] dark:text-[#141210] dark:hover:bg-[#d8d4cf] dark:disabled:bg-[#3a3630] dark:disabled:text-[#7a746c]"
-            >
-              {isGenerating ? '正在生成行程' : hasAiContext ? '优化当前行程' : '生成行程草案'}
-              {isGenerating ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
-            </button>
+            <div className="mt-3 flex gap-2">
+              <button
+                type="submit"
+                disabled={isGenerating}
+                className="inline-flex flex-1 items-center justify-center gap-2 rounded-md bg-stone-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-stone-800 disabled:cursor-not-allowed disabled:bg-stone-500 dark:bg-[#e8e4df] dark:text-[#141210] dark:hover:bg-[#d8d4cf] dark:disabled:bg-[#3a3630] dark:disabled:text-[#7a746c]"
+              >
+                {isGenerating ? '正在生成行程' : hasAiContext ? '优化当前行程' : '生成行程草案'}
+                {isGenerating ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
+              </button>
+              {lastAiRequest ? (
+                <button
+                  type="button"
+                  onClick={() => setIsAiDebugOpen((isOpen) => !isOpen)}
+                  aria-expanded={isAiDebugOpen}
+                  aria-label={isAiDebugOpen ? '隐藏请求/响应详情' : '显示请求/响应详情'}
+                  title={isAiDebugOpen ? '隐藏请求/响应详情' : '显示请求/响应详情'}
+                  className="inline-flex shrink-0 items-center justify-center rounded-md border border-stone-200 bg-white px-3 py-3 text-stone-600 transition hover:border-stone-300 hover:bg-stone-50 dark:border-[#3a3630] dark:bg-[#1e1c1a] dark:text-[#9a9389] dark:hover:border-[#5a554e] dark:hover:bg-[#2e2b26]"
+                >
+                  <ChevronDown className={`h-4 w-4 transition ${isAiDebugOpen ? 'rotate-180' : ''}`} />
+                </button>
+              ) : null}
+            </div>
+            {isAiDebugOpen && lastAiRequest ? (
+              <div className="mt-2 space-y-2 rounded-md border border-stone-200 bg-stone-50 p-3 text-xs dark:border-[#3a3630] dark:bg-[#1e1c1a]">
+                <div>
+                  <p className="mb-1 font-semibold text-stone-600 dark:text-[#9a9389]">发送给 DeepSeek 的内容</p>
+                  <pre className="max-h-40 overflow-auto rounded bg-white p-2 text-stone-700 dark:bg-[#252320] dark:text-[#b5afa6]">
+                    {JSON.stringify(lastAiRequest, null, 2)}
+                  </pre>
+                </div>
+                {lastAiResponse ? (
+                  <div>
+                    <p className="mb-1 font-semibold text-stone-600 dark:text-[#9a9389]">DeepSeek 返回的内容</p>
+                    <pre className="max-h-40 overflow-auto rounded bg-white p-2 text-stone-700 dark:bg-[#252320] dark:text-[#b5afa6]">
+                      {JSON.stringify(lastAiResponse, null, 2)}
+                    </pre>
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
             <button
               type="button"
               onClick={clearPlan}
@@ -1898,14 +2538,12 @@ function App() {
           </form>
         </header>
 
-        <section className="animate-fade-up animate-fade-up-delay-1 mt-5 grid gap-3 md:grid-cols-4">
-          <div className="group rounded-xl border border-stone-200/80 bg-white/85 p-4 shadow-soft backdrop-blur transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg dark:border-[#3a3630]/80 dark:bg-[#1e1c1a]/85 dark:shadow-soft-dark">
-            <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-stone-400 dark:text-[#5e584f]">预算预估</p>
-            <div className="mt-2.5 flex items-center gap-3">
-              <div className="stat-icon-ring bg-amber-50 text-amber-600 dark:bg-amber-950/30 dark:text-amber-400">
-                <Coins className="h-5 w-5" />
-              </div>
-              <p className="text-xl font-black tracking-tight text-stone-950 dark:text-[#e8e4df]">{computedBudgetEstimate}</p>
+        <section className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <div className="rounded-lg border border-stone-200 bg-white/85 p-4 shadow-soft backdrop-blur transition dark:border-[#3a3630] dark:bg-[#1e1c1a]/85 dark:shadow-soft-dark">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-stone-400 dark:text-[#5e584f]">预算预估</p>
+            <div className="mt-2 flex items-center gap-3">
+              <Coins className="h-6 w-6 text-amber-600" />
+              <p className="text-2xl font-bold text-stone-950 dark:text-[#e8e4df]">{computedBudgetEstimate}</p>
             </div>
             <p className="mt-2 text-[11px] font-medium text-stone-400 dark:text-[#6a645c]">按卡片金额自动汇总</p>
           </div>
@@ -1929,13 +2567,40 @@ function App() {
               </p>
             </div>
           </div>
+          <button
+            type="button"
+            onClick={scrollToPackingList}
+            className="group rounded-lg border border-stone-200 bg-white/85 p-4 text-left shadow-soft backdrop-blur transition hover:-translate-y-0.5 hover:border-rose-200 hover:bg-rose-50/60 hover:shadow-card focus:outline-none focus:ring-2 focus:ring-rose-200 dark:border-[#3a3630] dark:bg-[#1e1c1a]/85 dark:shadow-soft-dark dark:hover:border-rose-900/60 dark:hover:bg-rose-950/20 dark:focus:ring-rose-900/60"
+            aria-label="查看携带物品清单"
+          >
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-stone-400 dark:text-[#5e584f]">携带物品</p>
+            <div className="mt-2 flex items-center gap-3">
+              <Backpack className="h-6 w-6 text-rose-600 transition group-hover:scale-105" />
+              <p className="text-2xl font-bold text-stone-950 dark:text-[#e8e4df]">
+                {packedItemCount}/{packingItems.length}件
+              </p>
+            </div>
+            <p className="mt-2 text-xs font-semibold text-rose-700 opacity-85 dark:text-rose-300">查看清单</p>
+          </button>
         </section>
 
         <section className="animate-fade-up animate-fade-up-delay-2 mt-5 flex-1 overflow-hidden rounded-2xl border border-stone-200/80 bg-white/70 p-3 shadow-soft backdrop-blur transition-all duration-300 dark:border-[#3a3630]/80 dark:bg-[#1e1c1a]/70 dark:shadow-soft-dark">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-3 px-1">
             <div>
-              <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-stone-400 dark:text-[#5e584f]">Kanban Board</p>
-              <h2 className="mt-1 text-lg font-black tracking-tight text-stone-950 dark:text-[#e8e4df]">每日行程看板</h2>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-stone-400 dark:text-[#5e584f]">Kanban Board</p>
+              <div className="mt-1 flex items-center gap-2">
+                <h2 className="text-lg font-bold text-stone-950 dark:text-[#e8e4df]">每日行程看板</h2>
+                <button
+                  type="button"
+                  onClick={() => setIsBoardCollapsed((isCollapsed) => !isCollapsed)}
+                  aria-expanded={!isBoardCollapsed}
+                  aria-label={isBoardCollapsed ? '展开每日行程看板' : '收起每日行程看板'}
+                  title={isBoardCollapsed ? '展开每日行程看板' : '收起每日行程看板'}
+                  className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-stone-200 bg-white text-stone-500 transition hover:border-stone-300 hover:bg-stone-50 hover:text-stone-700 dark:border-[#3a3630] dark:bg-[#1e1c1a] dark:text-[#7a746c] dark:hover:border-[#5a554e] dark:hover:bg-[#2e2b26] dark:hover:text-[#b5afa6]"
+                >
+                  <ChevronDown className={`h-3.5 w-3.5 transition ${isBoardCollapsed ? '-rotate-90' : ''}`} />
+                </button>
+              </div>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <button
@@ -1993,11 +2658,13 @@ function App() {
               </div>
             </div>
           </div>
-          <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-stone-200/80 bg-white/80 p-3 transition-all duration-300 dark:border-[#3a3630]/80 dark:bg-[#1e1c1a]/80">
-            <div className="mr-1 inline-flex items-center gap-2 text-xs font-bold text-stone-500 dark:text-[#7a746c]">
-              <SlidersHorizontal className="h-4 w-4" />
-              类型筛选
-            </div>
+          {isBoardCollapsed ? null : (
+            <>
+              <div className="mb-4 flex flex-wrap items-center gap-2 rounded-lg border border-stone-200 bg-white/80 p-3 transition dark:border-[#3a3630] dark:bg-[#1e1c1a]/80">
+                <div className="mr-1 inline-flex items-center gap-2 text-xs font-semibold text-stone-500 dark:text-[#7a746c]">
+                  <SlidersHorizontal className="h-4 w-4" />
+                  类型筛选
+                </div>
             <button
               type="button"
               onClick={showAllTypes}
@@ -2130,6 +2797,7 @@ function App() {
                             day={day}
                             items={items}
                             dateInfo={getDayDateInfo(plan.start_date, day)}
+                            weather={plan.weather?.[day] || ''}
                             totalItems={plan.itinerary[day]?.length || 0}
                             isFilteredView={isFilteredView}
                             canDeleteDay={dayNames.length > 1}
@@ -2157,8 +2825,35 @@ function App() {
                 </div>
               )}
             </Droppable>
-          </DragDropContext>
+              </DragDropContext>
+            </>
+          )}
         </section>
+
+        <div id="packing-list" ref={packingSectionRef} className="scroll-mt-5">
+          <PackingList
+            items={packingItems}
+            form={packingForm}
+            isCollapsed={isPackingCollapsed}
+            activeCategory={activePackingCategory}
+            searchQuery={packingSearchQuery}
+            onFormField={updatePackingForm}
+            onAddItem={addPackingItem}
+            onToggleCollapsed={() => setIsPackingCollapsed((isCollapsed) => !isCollapsed)}
+            onCategoryFilter={setActivePackingCategory}
+            onSearchQuery={setPackingSearchQuery}
+            onClearFilters={clearPackingFilters}
+            onToggleItem={togglePackingItem}
+            onDeleteItem={deletePackingItem}
+            onReorderItems={reorderPackingItems}
+            editingPackingId={editingPackingId}
+            editingPackingForm={editingPackingForm}
+            onStartEditPackingItem={startEditPackingItem}
+            onEditPackingField={updateEditingPackingForm}
+            onSavePackingItemEdit={savePackingItemEdit}
+            onCancelPackingItemEdit={cancelPackingItemEdit}
+          />
+        </div>
       </div>
     </main>
   );
