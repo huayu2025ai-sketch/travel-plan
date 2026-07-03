@@ -8,7 +8,10 @@ export default async function handler(req, res) {
 
   try {
     const body = typeof req.body === 'string' ? JSON.parse(req.body || '{}') : req.body || {};
-    const plan = await generateTravelPlan(body.idea);
+    const plan = await generateTravelPlan(body.idea, {
+      currentPlan: body.currentPlan,
+      history: body.history,
+    });
 
     res.status(200).json(plan);
   } catch (error) {

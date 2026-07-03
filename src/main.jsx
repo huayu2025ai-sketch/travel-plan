@@ -140,6 +140,7 @@ const typeAccent = {
 
 const typeOptions = ['交通', '景点', 'citywalk', '美食', '酒店', '娱乐'];
 const storageKey = 'travel-plan-board-v1';
+const conversationStorageKey = 'travel-plan-conversation-v1';
 const themeKey = 'travel-plan-theme';
 const generationStages = [
   '解析目的地与出行天数',
@@ -150,6 +151,18 @@ const generationStages = [
 
 function getTypeBadgeClass(type) {
   return typeStyles[type] || 'border-stone-200 bg-stone-50 text-stone-700 dark:border-[#3a3630] dark:bg-[#252320] dark:text-[#b5afa6]';
+}
+
+function getCardGlowClass(type) {
+  const glowMap = {
+    交通: 'card-glow card-glow-accent-sky',
+    景点: 'card-glow card-glow-accent-emerald',
+    citywalk: 'card-glow card-glow-accent-lime',
+    美食: 'card-glow card-glow-accent-amber',
+    酒店: 'card-glow card-glow-accent-violet',
+    娱乐: 'card-glow card-glow-accent-rose',
+  };
+  return glowMap[type] || 'card-glow';
 }
 
 function createEmptyCardForm(day) {
@@ -797,8 +810,7 @@ async function buildPlanImageBlob(plan) {
 
       ctx.fillStyle = '#57534e';
       ctx.font = '700 20px "PingFang SC", "Microsoft YaHei", sans-serif';
-      ctx.fillText(`费用 ${item.cost}`, 242, y + 84);
-      ctx.fillText(`耗时 ${item.duration}`, 430, y + 84);
+      ctx.fillText(`耗时 ${item.duration}`, 242, y + 84);
 
       ctx.fillStyle = '#78716c';
       ctx.font = '500 20px "PingFang SC", "Microsoft YaHei", sans-serif';
@@ -822,6 +834,35 @@ function loadStoredPlan() {
   } catch {
     return initialTripPlan;
   }
+}
+
+function loadStoredConversation() {
+  if (typeof window === 'undefined') return [];
+
+  try {
+    const storedConversation = window.localStorage.getItem(conversationStorageKey);
+    const parsedConversation = storedConversation ? JSON.parse(storedConversation) : [];
+    return Array.isArray(parsedConversation) ? parsedConversation.slice(-8) : [];
+  } catch {
+    return [];
+  }
+}
+
+function hasPlanContent(plan) {
+  return getAllItems(plan.itinerary).length > 0 || Boolean(plan.start_date) || plan.recommended_transport !== '待推荐';
+}
+
+function isInitialDemoPlan(plan) {
+  return JSON.stringify(normalizeImportedPlan(plan)) === JSON.stringify(normalizeImportedPlan(initialTripPlan));
+}
+
+function compactPlanForAi(plan) {
+  return withComputedBudget({
+    start_date: plan.start_date || '',
+    total_budget_estimate: plan.total_budget_estimate || '',
+    recommended_transport: plan.recommended_transport || '待推荐',
+    itinerary: plan.itinerary,
+  });
 }
 
 function renumberItineraryDays(itinerary) {
@@ -975,7 +1016,7 @@ function ThemeToggle({ theme, setTheme }) {
     <button
       type="button"
       onClick={() => setTheme(isDark ? 'light' : 'dark')}
-      className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-stone-200 bg-white text-stone-500 shadow-sm transition hover:border-stone-300 hover:text-stone-700 dark:border-[#3a3630] dark:bg-[#1e1c1a] dark:text-[#7a746c] dark:hover:border-[#5a554e] dark:hover:text-[#b5afa6]"
+      className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-stone-200/80 bg-white/90 text-stone-500 shadow-sm backdrop-blur-sm transition-all duration-200 hover:border-stone-300 hover:text-amber-600 hover:shadow-md dark:border-[#3a3630]/80 dark:bg-[#1e1c1a]/90 dark:text-[#7a746c] dark:hover:border-amber-800/40 dark:hover:text-amber-400 dark:hover:shadow-md dark:shadow-none"
       aria-label="切换主题"
       title="切换主题"
     >
@@ -1038,49 +1079,51 @@ function TripCard({
 
   return (
     <article
-      className={`group relative overflow-hidden rounded-lg border bg-white p-4 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:shadow-card dark:border-[#3a3630] dark:bg-[#1e1c1a] dark:shadow-none dark:hover:shadow-card-dark ${
-        isDragging ? 'border-stone-400 shadow-card ring-2 ring-stone-300 dark:border-[#5a554e] dark:ring-[#4a453e] dark:shadow-card-dark' : 'border-stone-200'
-      }`}
+      className={`group relative overflow-hidden rounded-xl border bg-white p-4 shadow-sm transition-all duration-300 ease-out hover:-translate-y-0.5 hover:shadow-lg dark:bg-[#1e1c1a] dark:shadow-none ${
+        isDragging
+          ? 'border-stone-400 shadow-xl ring-2 ring-stone-300/60 dark:border-[#5a554e] dark:ring-[#4a453e] dark:shadow-card-dark'
+          : `border-stone-200/80 hover:border-stone-300/80 dark:border-[#3a3630]/80 dark:hover:border-[#4a453e]`
+      } ${getCardGlowClass(item.type)}`}
     >
-      <span className={`absolute left-0 top-0 h-full w-1 ${typeAccent[item.type] || 'bg-slate-400'}`} />
+      <span className={`absolute left-0 top-0 h-full w-1 rounded-full transition-all duration-300 ${typeAccent[item.type] || 'bg-slate-400'}`} />
       <div className="flex items-start justify-between gap-3">
-        <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${getTypeBadgeClass(item.type)}`}>
+        <span className={`rounded-full border px-2.5 py-1 text-[11px] font-bold tracking-wide uppercase ${getTypeBadgeClass(item.type)}`}>
           {item.type}
         </span>
-        <div className="flex items-center gap-1 text-stone-400 transition group-hover:text-stone-700 dark:text-[#5e584f] dark:group-hover:text-[#b5afa6]">
+        <div className="flex items-center gap-0.5 text-stone-400 opacity-0 transition-all duration-200 group-hover:opacity-100 dark:text-[#5e584f]">
           <GripVertical className="h-4 w-4 shrink-0" />
           <button
             type="button"
             onClick={onStartEdit}
             aria-label={`编辑 ${item.title}`}
-            className="ml-1 flex h-7 w-7 items-center justify-center rounded-full text-stone-400 transition hover:bg-stone-100 hover:text-stone-700 dark:text-[#5e584f] dark:hover:bg-[#2e2b26] dark:hover:text-[#b5afa6]"
+            className="ml-0.5 flex h-7 w-7 items-center justify-center rounded-full text-stone-400 transition-all duration-150 hover:bg-stone-100 hover:text-stone-700 dark:text-[#5e584f] dark:hover:bg-[#2e2b26] dark:hover:text-[#b5afa6]"
           >
-            <Pencil className="h-4 w-4" />
+            <Pencil className="h-3.5 w-3.5" />
           </button>
           <button
             type="button"
             onClick={onDuplicate}
             aria-label={`复制 ${item.title}`}
-            className="ml-1 flex h-7 w-7 items-center justify-center rounded-full text-stone-400 transition hover:bg-stone-100 hover:text-stone-700 dark:text-[#5e584f] dark:hover:bg-[#2e2b26] dark:hover:text-[#b5afa6]"
+            className="ml-0.5 flex h-7 w-7 items-center justify-center rounded-full text-stone-400 transition-all duration-150 hover:bg-stone-100 hover:text-stone-700 dark:text-[#5e584f] dark:hover:bg-[#2e2b26] dark:hover:text-[#b5afa6]"
           >
-            <Copy className="h-4 w-4" />
+            <Copy className="h-3.5 w-3.5" />
           </button>
           <button
             type="button"
             onClick={onRequestDelete}
             aria-label={`删除 ${item.title}`}
-            className="ml-1 flex h-7 w-7 items-center justify-center rounded-full text-stone-400 transition hover:bg-red-50 hover:text-red-600 dark:text-[#5e584f] dark:hover:bg-red-950/30 dark:hover:text-red-400"
+            className="ml-0.5 flex h-7 w-7 items-center justify-center rounded-full text-stone-400 transition-all duration-150 hover:bg-red-50 hover:text-red-600 dark:text-[#5e584f] dark:hover:bg-red-950/30 dark:hover:text-red-400"
           >
-            <Trash2 className="h-4 w-4" />
+            <Trash2 className="h-3.5 w-3.5" />
           </button>
         </div>
       </div>
       {isEditing ? (
-        <div className="mt-3 space-y-2 rounded-md border border-stone-200 bg-stone-50 p-2 dark:border-[#3a3630] dark:bg-[#252320]">
+        <div className="mt-3 space-y-2 rounded-xl border border-stone-200/80 bg-stone-50/80 p-2.5 dark:border-[#3a3630]/80 dark:bg-[#252320]/80">
           <select
             value={editForm.type}
             onChange={(event) => onEditField('type', event.target.value)}
-            className="h-9 w-full rounded-md border border-stone-200 bg-white px-2 text-sm text-stone-700 outline-none focus:border-stone-400 dark:border-[#3a3630] dark:bg-[#2a2724] dark:text-[#b5afa6] dark:focus:border-[#5a554e]"
+            className="h-9 w-full rounded-lg border border-stone-200/80 bg-white px-2 text-sm text-stone-700 outline-none transition-all duration-200 focus:border-stone-400 dark:border-[#3a3630]/80 dark:bg-[#2a2724] dark:text-[#b5afa6] dark:focus:border-[#5a554e]"
             aria-label="编辑类型"
           >
             {typeOptions.map((type) => (
@@ -1092,7 +1135,7 @@ function TripCard({
           <input
             value={editForm.title}
             onChange={(event) => onEditField('title', event.target.value)}
-            className="h-9 w-full rounded-md border border-stone-200 bg-white px-2 text-sm text-stone-700 outline-none placeholder:text-stone-400 focus:border-stone-400 dark:border-[#3a3630] dark:bg-[#2a2724] dark:text-[#b5afa6] dark:placeholder:text-[#5e584f] dark:focus:border-[#5a554e]"
+            className="h-9 w-full rounded-lg border border-stone-200/80 bg-white px-2 text-sm text-stone-700 outline-none transition-all duration-200 placeholder:text-stone-400 focus:border-stone-400 dark:border-[#3a3630]/80 dark:bg-[#2a2724] dark:text-[#b5afa6] dark:placeholder:text-[#5e584f] dark:focus:border-[#5a554e]"
             placeholder="卡片标题"
           />
           <div className="grid grid-cols-2 gap-2">
@@ -1103,20 +1146,20 @@ function TripCard({
               inputMode="numeric"
               value={editForm.cost}
               onChange={(event) => onEditField('cost', event.target.value)}
-              className="h-9 rounded-md border border-stone-200 bg-white px-2 text-sm text-stone-700 outline-none placeholder:text-stone-400 focus:border-stone-400 dark:border-[#3a3630] dark:bg-[#2a2724] dark:text-[#b5afa6] dark:placeholder:text-[#5e584f] dark:focus:border-[#5a554e]"
+              className="h-9 rounded-lg border border-stone-200/80 bg-white px-2 text-sm text-stone-700 outline-none transition-all duration-200 placeholder:text-stone-400 focus:border-stone-400 dark:border-[#3a3630]/80 dark:bg-[#2a2724] dark:text-[#b5afa6] dark:placeholder:text-[#5e584f] dark:focus:border-[#5a554e]"
               placeholder="金额（元）"
             />
             <input
               value={editForm.duration}
               onChange={(event) => onEditField('duration', event.target.value)}
-              className="h-9 rounded-md border border-stone-200 bg-white px-2 text-sm text-stone-700 outline-none placeholder:text-stone-400 focus:border-stone-400 dark:border-[#3a3630] dark:bg-[#2a2724] dark:text-[#b5afa6] dark:placeholder:text-[#5e584f] dark:focus:border-[#5a554e]"
+              className="h-9 rounded-lg border border-stone-200/80 bg-white px-2 text-sm text-stone-700 outline-none transition-all duration-200 placeholder:text-stone-400 focus:border-stone-400 dark:border-[#3a3630]/80 dark:bg-[#2a2724] dark:text-[#b5afa6] dark:placeholder:text-[#5e584f] dark:focus:border-[#5a554e]"
               placeholder="耗时"
             />
           </div>
           <textarea
             value={editForm.advice}
             onChange={(event) => onEditField('advice', event.target.value)}
-            className="h-20 w-full resize-none rounded-md border border-stone-200 bg-white px-2 py-2 text-sm leading-5 text-stone-700 outline-none placeholder:text-stone-400 focus:border-stone-400 dark:border-[#3a3630] dark:bg-[#2a2724] dark:text-[#b5afa6] dark:placeholder:text-[#5e584f] dark:focus:border-[#5a554e]"
+            className="h-20 w-full resize-none rounded-lg border border-stone-200/80 bg-white px-2 py-2 text-sm leading-5 text-stone-700 outline-none transition-all duration-200 placeholder:text-stone-400 focus:border-stone-400 dark:border-[#3a3630]/80 dark:bg-[#2a2724] dark:text-[#b5afa6] dark:placeholder:text-[#5e584f] dark:focus:border-[#5a554e]"
             placeholder="建议"
           />
           <div className="flex gap-2">
@@ -1140,18 +1183,18 @@ function TripCard({
         </div>
       ) : (
         <>
-          <h3 className="mt-3 text-base font-semibold leading-snug text-stone-950 dark:text-[#e8e4df]">{item.title}</h3>
-          <div className="mt-4 grid grid-cols-2 gap-2 text-xs text-stone-600 dark:text-[#9a9389]">
-            <div className="flex items-center gap-1.5 rounded-md bg-stone-50 px-2 py-2 dark:bg-[#252320]">
-              <Coins className="h-3.5 w-3.5 text-stone-500 dark:text-[#7a746c]" />
-              <span>{item.cost}</span>
+          <h3 className="mt-3 text-[15px] font-bold leading-snug text-stone-950 dark:text-[#e8e4df]">{item.title}</h3>
+          <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-stone-600 dark:text-[#9a9389]">
+            <div className="flex items-center gap-1.5 rounded-lg bg-stone-50/80 px-2.5 py-2 dark:bg-[#252320]/80">
+              <Coins className="h-3.5 w-3.5 text-amber-500 dark:text-amber-400" />
+              <span className="font-medium">{item.cost}</span>
             </div>
-            <div className="flex items-center gap-1.5 rounded-md bg-stone-50 px-2 py-2 dark:bg-[#252320]">
-              <Clock3 className="h-3.5 w-3.5 text-stone-500 dark:text-[#7a746c]" />
-              <span>{item.duration}</span>
+            <div className="flex items-center gap-1.5 rounded-lg bg-stone-50/80 px-2.5 py-2 dark:bg-[#252320]/80">
+              <Clock3 className="h-3.5 w-3.5 text-sky-500 dark:text-sky-400" />
+              <span className="font-medium">{item.duration}</span>
             </div>
           </div>
-          <p className="mt-3 text-sm leading-6 text-stone-600 dark:text-[#9a9389]">{item.advice}</p>
+          <p className="mt-3 text-[13px] leading-relaxed text-stone-500 dark:text-[#8a847b]">{item.advice}</p>
         </>
       )}
       {isConfirmingDelete ? (
@@ -1221,30 +1264,30 @@ function DayColumn({
 
   return (
     <section
-      className={`flex min-h-[520px] w-[292px] shrink-0 flex-col rounded-lg border bg-stone-50/80 p-3 shadow-soft backdrop-blur transition dark:border-[#3a3630] dark:bg-[#1e1c1a]/80 dark:shadow-soft-dark ${
-        isDraggingDay ? 'border-stone-400 ring-2 ring-stone-300 dark:border-[#5a554e] dark:ring-[#4a453e]' : 'border-stone-200/80'
+      className={`flex min-h-[520px] w-[292px] shrink-0 flex-col rounded-xl border bg-stone-50/80 p-3 shadow-soft backdrop-blur transition-all duration-300 dark:border-[#3a3630]/80 dark:bg-[#1e1c1a]/80 dark:shadow-soft-dark ${
+        isDraggingDay ? 'border-stone-400 ring-2 ring-stone-300/60 shadow-lg dark:border-[#5a554e] dark:ring-[#4a453e]' : 'border-stone-200/80'
       }`}
     >
-      <div className="border-b border-stone-200 pb-3 dark:border-[#3a3630]">
+      <div className="border-b border-stone-200/80 pb-3 dark:border-[#3a3630]/80">
         <div className="flex min-w-0 items-center gap-2">
-          <p className="shrink-0 text-xs font-semibold uppercase tracking-[0.18em] text-stone-400 dark:text-[#5e584f]">行程日</p>
+          <p className="shrink-0 text-[11px] font-bold uppercase tracking-[0.2em] text-stone-400 dark:text-[#5e584f]">行程日</p>
           {dateInfo.displayText ? (
-            <span className={`min-w-0 truncate rounded-full px-2 py-0.5 text-xs font-semibold ${getDateBadgeClass(dateInfo)}`}>
+            <span className={`min-w-0 truncate rounded-full px-2 py-0.5 text-[11px] font-bold ${getDateBadgeClass(dateInfo)}`}>
               {dateInfo.displayText}
             </span>
           ) : null}
         </div>
         <div className="mt-1 flex items-center justify-between gap-2">
-          <h2 className="min-w-0 truncate font-display text-2xl font-bold text-stone-950 dark:text-[#e8e4df]">{day}</h2>
+          <h2 className="min-w-0 truncate font-display text-2xl font-black tracking-tight text-stone-950 dark:text-[#e8e4df]">{day}</h2>
           <div className="flex shrink-0 items-center gap-1">
           {canDeleteDay ? (
             <button
               type="button"
               onClick={() => onDeleteDay(day)}
               aria-label={`删除 ${day}`}
-              className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-stone-400 shadow-sm transition hover:bg-red-50 hover:text-red-600 dark:bg-[#1e1c1a] dark:text-[#5e584f] dark:hover:bg-red-950/30 dark:hover:text-red-400"
+              className="flex h-8 w-8 items-center justify-center rounded-full bg-white/90 text-stone-400 shadow-sm transition-all duration-200 hover:bg-red-50 hover:text-red-600 hover:shadow-md dark:bg-[#1e1c1a]/90 dark:text-[#5e584f] dark:hover:bg-red-950/30 dark:hover:text-red-400"
             >
-              <Trash2 className="h-4 w-4" />
+              <Trash2 className="h-3.5 w-3.5" />
             </button>
           ) : null}
           <button
@@ -1252,15 +1295,15 @@ function DayColumn({
             onClick={openDatePicker}
             aria-label={`选择 ${day} 日期`}
             title="选择日期"
-            className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-stone-500 shadow-sm transition hover:bg-emerald-50 hover:text-emerald-700 dark:bg-[#1e1c1a] dark:text-[#7a746c] dark:hover:bg-emerald-950/30 dark:hover:text-emerald-400"
+            className="flex h-8 w-8 items-center justify-center rounded-full bg-white/90 text-stone-500 shadow-sm transition-all duration-200 hover:bg-emerald-50 hover:text-emerald-600 hover:shadow-md dark:bg-[#1e1c1a]/90 dark:text-[#7a746c] dark:hover:bg-emerald-950/30 dark:hover:text-emerald-400"
           >
-            <CalendarDays className="h-4 w-4" />
+            <CalendarDays className="h-3.5 w-3.5" />
           </button>
           <div
             {...dayDragHandleProps}
             role="button"
             aria-label={`拖拽 ${day}`}
-            className="flex h-10 w-10 cursor-grab items-center justify-center rounded-full bg-white text-stone-700 shadow-sm transition active:cursor-grabbing dark:bg-[#1e1c1a] dark:text-[#b5afa6]"
+            className="flex h-9 w-9 cursor-grab items-center justify-center rounded-full bg-white/90 text-stone-700 shadow-sm transition-all duration-200 active:cursor-grabbing hover:shadow-md dark:bg-[#1e1c1a]/90 dark:text-[#b5afa6]"
             title="拖拽调整天数顺序"
           >
             <GripVertical className="h-5 w-5" />
@@ -1341,8 +1384,13 @@ function DayColumn({
                 ),
               )
             ) : (
-              <div className="flex flex-1 items-center justify-center rounded-lg border border-dashed border-stone-300 bg-white/60 p-6 text-center text-sm text-stone-400 dark:border-[#4a453e] dark:bg-[#1e1c1a]/60 dark:text-[#5e584f]">
-                {isFilteredView ? '没有匹配类型的卡片' : '拖入卡片'}
+              <div className="empty-droppable flex flex-1 items-center justify-center rounded-xl border border-dashed border-stone-300/60 bg-white/40 p-6 text-center dark:border-[#4a453e]/60 dark:bg-[#1e1c1a]/40">
+                <div>
+                  <GripVertical className="mx-auto h-6 w-6 text-stone-300 dark:text-[#4a453e]" />
+                  <p className="mt-2 text-sm text-stone-400 dark:text-[#5e584f]">
+                    {isFilteredView ? '没有匹配类型的卡片' : '拖入卡片'}
+                  </p>
+                </div>
               </div>
             )}
             {provided.placeholder}
@@ -1366,6 +1414,7 @@ function App() {
   const [isAddFormOpen, setIsAddFormOpen] = useState(false);
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
   const [activeTypes, setActiveTypes] = useState(typeOptions);
+  const [conversationHistory, setConversationHistory] = useState(loadStoredConversation);
   const [generationProgress, setGenerationProgress] = useState(0);
   const [generationStageIndex, setGenerationStageIndex] = useState(0);
   const { theme, setTheme } = useTheme();
@@ -1383,6 +1432,8 @@ function App() {
     counts[type] = getAllItems(plan.itinerary).filter((item) => item.type === type).length;
     return counts;
   }, {});
+  const hasCurrentPlanContext = hasPlanContent(plan) && !isInitialDemoPlan(plan);
+  const hasAiContext = hasCurrentPlanContext || conversationHistory.length > 0;
 
   useEffect(() => {
     try {
@@ -1391,6 +1442,14 @@ function App() {
       // Local storage can be unavailable in restricted browser modes; the board still works in memory.
     }
   }, [plan]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(conversationStorageKey, JSON.stringify(conversationHistory.slice(-8)));
+    } catch {
+      // Context history is a convenience feature; generation still works without local storage.
+    }
+  }, [conversationHistory]);
 
   useEffect(() => {
     if (!isGenerating) {
@@ -1520,10 +1579,16 @@ function App() {
     setError('');
 
     try {
+      const requestHistory = conversationHistory.slice(-6);
+      const requestPlan = hasCurrentPlanContext ? compactPlanForAi(plan) : null;
       const response = await fetch('/api/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ idea: trimmedIdea }),
+        body: JSON.stringify({
+          idea: trimmedIdea,
+          currentPlan: requestPlan,
+          history: requestHistory,
+        }),
       });
       const responseText = await response.text();
       let data;
@@ -1540,6 +1605,16 @@ function App() {
 
       const generatedPlan = normalizeImportedPlan(data);
       setPlan(generatedPlan);
+      setConversationHistory((currentHistory) =>
+        [
+          ...currentHistory,
+          { role: 'user', content: trimmedIdea },
+          {
+            role: 'assistant',
+            content: `已生成/优化 ${Object.keys(generatedPlan.itinerary).length} 天、${getAllItems(generatedPlan.itinerary).length} 项行程。`,
+          },
+        ].slice(-8),
+      );
       setCardForm(createEmptyCardForm(Object.keys(generatedPlan.itinerary)[0] || 'Day 1'));
       setEditingCardId('');
       setPendingDeleteId('');
@@ -1565,6 +1640,7 @@ function App() {
 
     try {
       window.localStorage.removeItem(storageKey);
+      window.localStorage.removeItem(conversationStorageKey);
     } catch {
       // The in-memory reset below still works if storage is unavailable.
     }
@@ -1576,6 +1652,7 @@ function App() {
     setEditingCardId('');
     setIsAddFormOpen(false);
     setActiveTypes(typeOptions);
+    setConversationHistory([]);
     setError('');
   };
 
@@ -1753,36 +1830,37 @@ function App() {
   };
 
   return (
-    <main className="min-h-screen bg-[#f5f1e8] text-stone-900 transition-colors duration-300 dark:bg-[#141210] dark:text-[#e8e4df]">
-      <div className="map-grid fixed inset-0 opacity-55" aria-hidden="true" />
+    <main className="min-h-screen bg-[#f5f1e8] text-stone-900 transition-colors duration-400 dark:bg-[#141210] dark:text-[#e8e4df]">
+      <div className="map-grid fixed inset-0 opacity-50" aria-hidden="true" />
       <div className="relative mx-auto flex min-h-screen max-w-[1680px] flex-col px-4 py-5 sm:px-6 lg:px-8">
-        <header className="grid gap-5 rounded-lg border border-stone-200 bg-white/82 p-4 shadow-soft backdrop-blur transition dark:border-[#3a3630] dark:bg-[#1e1c1a]/82 dark:shadow-soft-dark md:grid-cols-[1.25fr_0.75fr] md:p-5">
+        <header className="animate-fade-up grid gap-5 rounded-2xl border border-stone-200/80 bg-white/85 p-5 shadow-soft backdrop-blur-lg transition-all duration-300 dark:border-[#3a3630]/80 dark:bg-[#1e1c1a]/85 dark:shadow-soft-dark md:grid-cols-[1.25fr_0.75fr] md:p-6">
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <span className="inline-flex items-center gap-2 rounded-full border border-stone-200 bg-stone-50 px-3 py-1 text-xs font-semibold text-stone-600 dark:border-[#3a3630] dark:bg-[#252320] dark:text-[#9a9389]">
-                <Sparkles className="h-3.5 w-3.5 text-amber-600" />
+              <span className="ai-badge inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-white shadow-sm">
+                <Sparkles className="h-3 w-3" />
                 AI 旅行草案
               </span>
-              <span className="text-xs font-medium text-stone-500 dark:text-[#7a746c]">编辑看板 Step 5 版本</span>
             </div>
-            <h1 className="mt-4 font-display text-4xl font-black leading-tight text-stone-950 dark:text-[#e8e4df] md:text-5xl">
-              把粗略想法整理成可调整的每日行程
+            <h1 className="mt-5 font-display text-4xl font-black leading-[1.15] tracking-tight text-stone-950 dark:text-[#e8e4df] md:text-5xl">
+              把粗略想法整理成
+              <br className="hidden sm:block" />
+              可调整的每日行程
             </h1>
-            <p className="mt-3 max-w-3xl text-sm leading-6 text-stone-600 dark:text-[#9a9389] md:text-base">
-              输入旅行想法后生成结构化 JSON，也可以手动添加、删除并拖拽调整卡片。
+            <p className="mt-3 max-w-2xl text-sm leading-relaxed text-stone-500 dark:text-[#8a847b] md:text-[15px]">
+              输入旅行想法后生成结构化行程，也可以继续输入优化要求，AI 会带入当前草案上下文。
             </p>
           </div>
 
-          <form onSubmit={generatePlan} className="rounded-lg border border-stone-200 bg-[#fbfaf7] p-3 transition dark:border-[#3a3630] dark:bg-[#252320]">
+          <form onSubmit={generatePlan} className="rounded-xl border border-stone-200/80 bg-[#fbfaf7]/90 p-3.5 backdrop-blur transition-all duration-300 dark:border-[#3a3630]/80 dark:bg-[#252320]/90">
             <div className="flex items-center justify-between">
-              <label htmlFor="trip-idea" className="text-sm font-semibold text-stone-800 dark:text-[#c4bdb4]">
-                旅行想法
+              <label htmlFor="trip-idea" className="text-sm font-bold text-stone-800 dark:text-[#c4bdb4]">
+                {hasAiContext ? '继续优化' : '旅行想法'}
               </label>
               <ThemeToggle theme={theme} setTheme={setTheme} />
             </div>
             <textarea
               id="trip-idea"
-              className="mt-2 h-28 w-full resize-none rounded-md border border-stone-200 bg-white px-3 py-2 text-sm leading-6 text-stone-700 outline-none ring-0 transition placeholder:text-stone-400 focus:border-stone-400 dark:border-[#3a3630] dark:bg-[#2a2724] dark:text-[#b5afa6] dark:placeholder:text-[#5e584f] dark:focus:border-[#5a554e]"
+              className="mt-2 h-28 w-full resize-none rounded-lg border border-stone-200/80 bg-white px-3 py-2.5 text-sm leading-6 text-stone-700 outline-none ring-0 transition-all duration-200 placeholder:text-stone-400 focus:border-stone-400 dark:border-[#3a3630]/80 dark:bg-[#2a2724] dark:text-[#b5afa6] dark:placeholder:text-[#5e584f] dark:focus:border-[#5a554e]"
               value={idea}
               onChange={(event) => setIdea(event.target.value)}
               disabled={isGenerating}
@@ -1796,68 +1874,79 @@ function App() {
             {isGenerating ? (
               <LoadingProgress progress={generationProgress} stage={generationStages[generationStageIndex]} />
             ) : null}
+            {hasAiContext ? (
+              <div className="mt-3 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-medium leading-5 text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-300">
+                已保留当前行程和最近沟通上下文，本轮输入会作为优化要求处理。点击清空行程后上下文会一并清除。
+              </div>
+            ) : null}
             <button
               type="submit"
               disabled={isGenerating}
-              className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-md bg-stone-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-stone-800 disabled:cursor-not-allowed disabled:bg-stone-500 dark:bg-[#e8e4df] dark:text-[#141210] dark:hover:bg-[#d8d4cf] dark:disabled:bg-[#3a3630] dark:disabled:text-[#7a746c]"
+              className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-stone-950 px-4 py-3 text-sm font-bold text-white shadow-sm transition-all duration-200 hover:bg-stone-800 hover:shadow-md disabled:cursor-not-allowed disabled:bg-stone-400 dark:bg-[#e8e4df] dark:text-[#141210] dark:hover:bg-[#d8d4cf] dark:disabled:bg-[#3a3630] dark:disabled:text-[#7a746c]"
             >
-              {isGenerating ? '正在生成行程' : '生成行程草案'}
+              {isGenerating ? '正在生成行程' : hasAiContext ? '优化当前行程' : '生成行程草案'}
               {isGenerating ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
             </button>
             <button
               type="button"
               onClick={clearPlan}
               disabled={isGenerating}
-              className="mt-2 inline-flex w-full items-center justify-center rounded-md border border-stone-200 bg-white px-3 py-2 text-xs font-semibold text-stone-500 transition hover:border-red-200 hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-60 dark:border-[#3a3630] dark:bg-[#1e1c1a] dark:text-[#9a9389] dark:hover:border-red-900/50 dark:hover:bg-red-950/30 dark:hover:text-red-400"
+              className="mt-2 inline-flex w-full items-center justify-center rounded-lg border border-stone-200/80 bg-white/80 px-3 py-2 text-xs font-semibold text-stone-400 transition-all duration-200 hover:border-red-200 hover:bg-red-50/80 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-60 dark:border-[#3a3630]/80 dark:bg-[#1e1c1a]/80 dark:text-[#7a746c] dark:hover:border-red-900/50 dark:hover:bg-red-950/30 dark:hover:text-red-400"
             >
               清空行程
             </button>
           </form>
         </header>
 
-        <section className="mt-5 grid gap-3 md:grid-cols-3">
-          <div className="rounded-lg border border-stone-200 bg-white/85 p-4 shadow-soft backdrop-blur transition dark:border-[#3a3630] dark:bg-[#1e1c1a]/85 dark:shadow-soft-dark">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-stone-400 dark:text-[#5e584f]">预算预估</p>
-            <div className="mt-2 flex items-center gap-3">
-              <Coins className="h-6 w-6 text-amber-600" />
-              <p className="text-2xl font-bold text-stone-950 dark:text-[#e8e4df]">{computedBudgetEstimate}</p>
+        <section className="animate-fade-up animate-fade-up-delay-1 mt-5 grid gap-3 md:grid-cols-4">
+          <div className="group rounded-xl border border-stone-200/80 bg-white/85 p-4 shadow-soft backdrop-blur transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg dark:border-[#3a3630]/80 dark:bg-[#1e1c1a]/85 dark:shadow-soft-dark">
+            <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-stone-400 dark:text-[#5e584f]">预算预估</p>
+            <div className="mt-2.5 flex items-center gap-3">
+              <div className="stat-icon-ring bg-amber-50 text-amber-600 dark:bg-amber-950/30 dark:text-amber-400">
+                <Coins className="h-5 w-5" />
+              </div>
+              <p className="text-xl font-black tracking-tight text-stone-950 dark:text-[#e8e4df]">{computedBudgetEstimate}</p>
             </div>
-            <p className="mt-2 text-xs font-medium text-stone-500 dark:text-[#7a746c]">按卡片金额自动汇总，千元区间显示</p>
+            <p className="mt-2 text-[11px] font-medium text-stone-400 dark:text-[#6a645c]">按卡片金额自动汇总</p>
           </div>
-          <div className="rounded-lg border border-stone-200 bg-white/85 p-4 shadow-soft backdrop-blur transition dark:border-[#3a3630] dark:bg-[#1e1c1a]/85 dark:shadow-soft-dark">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-stone-400 dark:text-[#5e584f]">推荐交通</p>
-            <div className="mt-2 flex items-center gap-3">
-              <TrainFront className="h-6 w-6 text-sky-600" />
-              <p className="text-2xl font-bold text-stone-950 dark:text-[#e8e4df]">{plan.recommended_transport}</p>
+          <div className="group rounded-xl border border-stone-200/80 bg-white/85 p-4 shadow-soft backdrop-blur transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg dark:border-[#3a3630]/80 dark:bg-[#1e1c1a]/85 dark:shadow-soft-dark">
+            <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-stone-400 dark:text-[#5e584f]">推荐交通</p>
+            <div className="mt-2.5 flex items-center gap-3">
+              <div className="stat-icon-ring bg-sky-50 text-sky-600 dark:bg-sky-950/30 dark:text-sky-400">
+                <TrainFront className="h-5 w-5" />
+              </div>
+              <p className="text-xl font-black tracking-tight text-stone-950 dark:text-[#e8e4df]">{plan.recommended_transport}</p>
             </div>
           </div>
-          <div className="rounded-lg border border-stone-200 bg-white/85 p-4 shadow-soft backdrop-blur transition dark:border-[#3a3630] dark:bg-[#1e1c1a]/85 dark:shadow-soft-dark">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-stone-400 dark:text-[#5e584f]">规划范围</p>
-            <div className="mt-2 flex items-center gap-3">
-              <Route className="h-6 w-6 text-emerald-600" />
-              <p className="text-2xl font-bold text-stone-950 dark:text-[#e8e4df]">
+          <div className="group rounded-xl border border-stone-200/80 bg-white/85 p-4 shadow-soft backdrop-blur transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg dark:border-[#3a3630]/80 dark:bg-[#1e1c1a]/85 dark:shadow-soft-dark">
+            <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-stone-400 dark:text-[#5e584f]">规划范围</p>
+            <div className="mt-2.5 flex items-center gap-3">
+              <div className="stat-icon-ring bg-emerald-50 text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-400">
+                <Route className="h-5 w-5" />
+              </div>
+              <p className="text-xl font-black tracking-tight text-stone-950 dark:text-[#e8e4df]">
                 {plannedDayCount}天 · {itineraryItemCount}项
               </p>
             </div>
           </div>
         </section>
 
-        <section className="mt-5 flex-1 overflow-hidden rounded-lg border border-stone-200 bg-white/70 p-3 shadow-soft backdrop-blur transition dark:border-[#3a3630] dark:bg-[#1e1c1a]/70 dark:shadow-soft-dark">
+        <section className="animate-fade-up animate-fade-up-delay-2 mt-5 flex-1 overflow-hidden rounded-2xl border border-stone-200/80 bg-white/70 p-3 shadow-soft backdrop-blur transition-all duration-300 dark:border-[#3a3630]/80 dark:bg-[#1e1c1a]/70 dark:shadow-soft-dark">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-3 px-1">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-stone-400 dark:text-[#5e584f]">Kanban Board</p>
-              <h2 className="mt-1 text-lg font-bold text-stone-950 dark:text-[#e8e4df]">每日行程看板</h2>
+              <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-stone-400 dark:text-[#5e584f]">Kanban Board</p>
+              <h2 className="mt-1 text-lg font-black tracking-tight text-stone-950 dark:text-[#e8e4df]">每日行程看板</h2>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <button
                 type="button"
                 onClick={addDay}
-                className="inline-flex items-center gap-2 rounded-full border border-stone-200 bg-white px-3 py-2 text-xs font-semibold text-stone-600 transition hover:border-stone-300 hover:bg-stone-50 dark:border-[#3a3630] dark:bg-[#1e1c1a] dark:text-[#9a9389] dark:hover:border-[#5a554e] dark:hover:bg-[#2e2b26]"
+                className="inline-flex items-center gap-2 rounded-full border border-stone-200/80 bg-white/90 px-3 py-2 text-xs font-semibold text-stone-600 shadow-sm backdrop-blur transition-all duration-200 hover:border-stone-300 hover:bg-stone-50 hover:shadow-md dark:border-[#3a3630]/80 dark:bg-[#1e1c1a]/90 dark:text-[#9a9389] dark:hover:border-[#5a554e] dark:hover:bg-[#2e2b26]"
               >
                 <Plus className="h-4 w-4 text-stone-500 dark:text-[#7a746c]" />
                 添加天数
               </button>
-              <label className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-stone-200 bg-white px-3 py-2 text-xs font-semibold text-stone-600 transition hover:border-stone-300 hover:bg-stone-50 dark:border-[#3a3630] dark:bg-[#1e1c1a] dark:text-[#9a9389] dark:hover:border-[#5a554e] dark:hover:bg-[#2e2b26]">
+              <label className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-stone-200/80 bg-white/90 px-3 py-2 text-xs font-semibold text-stone-600 shadow-sm backdrop-blur transition-all duration-200 hover:border-stone-300 hover:bg-stone-50 hover:shadow-md dark:border-[#3a3630]/80 dark:bg-[#1e1c1a]/90 dark:text-[#9a9389] dark:hover:border-[#5a554e] dark:hover:bg-[#2e2b26]">
                 <FileUp className="h-4 w-4 text-stone-500 dark:text-[#7a746c]" />
                 导入JSON
                 <input key={importInputKey} type="file" accept="application/json,.json" onChange={importPlan} className="hidden" />
@@ -1867,14 +1956,14 @@ function App() {
                   type="button"
                   onClick={() => setIsExportMenuOpen((isOpen) => !isOpen)}
                   aria-expanded={isExportMenuOpen}
-                  className="inline-flex items-center gap-2 rounded-full border border-stone-200 bg-white px-3 py-2 text-xs font-semibold text-stone-600 transition hover:border-stone-300 hover:bg-stone-50 dark:border-[#3a3630] dark:bg-[#1e1c1a] dark:text-[#9a9389] dark:hover:border-[#5a554e] dark:hover:bg-[#2e2b26]"
+                  className="inline-flex items-center gap-2 rounded-full border border-stone-200/80 bg-white/90 px-3 py-2 text-xs font-semibold text-stone-600 shadow-sm backdrop-blur transition-all duration-200 hover:border-stone-300 hover:bg-stone-50 hover:shadow-md dark:border-[#3a3630]/80 dark:bg-[#1e1c1a]/90 dark:text-[#9a9389] dark:hover:border-[#5a554e] dark:hover:bg-[#2e2b26]"
                 >
                   <Download className="h-4 w-4 text-stone-500 dark:text-[#7a746c]" />
                   导出
                   <ChevronDown className="h-3.5 w-3.5 text-stone-400 dark:text-[#7a746c]" />
                 </button>
                 {isExportMenuOpen ? (
-                  <div className="absolute right-0 z-20 mt-2 w-36 overflow-hidden rounded-lg border border-stone-200 bg-white p-1 shadow-card dark:border-[#3a3630] dark:bg-[#1e1c1a] dark:shadow-card-dark">
+                  <div className="dropdown-enter absolute right-0 z-20 mt-2 w-36 overflow-hidden rounded-xl border border-stone-200/80 bg-white/95 p-1 shadow-lg backdrop-blur-lg dark:border-[#3a3630]/80 dark:bg-[#1e1c1a]/95 dark:shadow-card-dark">
                     <button
                       type="button"
                       onClick={() => runExportAction(exportPlan)}
@@ -1904,18 +1993,18 @@ function App() {
               </div>
             </div>
           </div>
-          <div className="mb-4 flex flex-wrap items-center gap-2 rounded-lg border border-stone-200 bg-white/80 p-3 transition dark:border-[#3a3630] dark:bg-[#1e1c1a]/80">
-            <div className="mr-1 inline-flex items-center gap-2 text-xs font-semibold text-stone-500 dark:text-[#7a746c]">
+          <div className="mb-4 flex flex-wrap items-center gap-2 rounded-xl border border-stone-200/80 bg-white/80 p-3 transition-all duration-300 dark:border-[#3a3630]/80 dark:bg-[#1e1c1a]/80">
+            <div className="mr-1 inline-flex items-center gap-2 text-xs font-bold text-stone-500 dark:text-[#7a746c]">
               <SlidersHorizontal className="h-4 w-4" />
               类型筛选
             </div>
             <button
               type="button"
               onClick={showAllTypes}
-              className={`inline-flex items-center rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+              className={`inline-flex items-center rounded-full border px-3 py-1.5 text-xs font-bold transition-all duration-200 ${
                 !isFilteredView
-                  ? 'border-stone-950 bg-stone-950 text-white dark:border-[#e8e4df] dark:bg-[#e8e4df] dark:text-[#141210]'
-                  : 'border-stone-200 bg-white text-stone-600 hover:bg-stone-50 dark:border-[#3a3630] dark:bg-[#1e1c1a] dark:text-[#9a9389] dark:hover:bg-[#2e2b26]'
+                  ? 'border-stone-950 bg-stone-950 text-white shadow-sm dark:border-[#e8e4df] dark:bg-[#e8e4df] dark:text-[#141210]'
+                  : 'border-stone-200/80 bg-white/90 text-stone-600 hover:bg-stone-50 dark:border-[#3a3630]/80 dark:bg-[#1e1c1a]/90 dark:text-[#9a9389] dark:hover:bg-[#2e2b26]'
               }`}
             >
               全部 {itineraryItemCount}
@@ -1927,14 +2016,14 @@ function App() {
                   key={type}
                   type="button"
                   onClick={() => toggleTypeFilter(type)}
-                  className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                  className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-bold transition-all duration-200 ${
                     isActive
                       ? getTypeBadgeClass(type)
-                      : 'border-stone-200 bg-white text-stone-400 hover:bg-stone-50 dark:border-[#3a3630] dark:bg-[#1e1c1a] dark:text-[#5e584f] dark:hover:bg-[#2e2b26]'
+                      : 'border-stone-200/80 bg-white/90 text-stone-400 hover:bg-stone-50 dark:border-[#3a3630]/80 dark:bg-[#1e1c1a]/90 dark:text-[#5e584f] dark:hover:bg-[#2e2b26]'
                   }`}
                   aria-pressed={isActive}
                 >
-                  <span className={`h-2 w-2 rounded-full ${typeAccent[type]}`} />
+                  <span className={`h-2 w-2 rounded-full transition-transform duration-200 ${typeAccent[type]} ${isActive ? 'scale-125' : ''}`} />
                   {type} {typeCounts[type] || 0}
                 </button>
               );
@@ -1962,12 +2051,12 @@ function App() {
           {isAddFormOpen ? (
             <form
               onSubmit={addCustomCard}
-              className="mb-4 grid gap-2 rounded-lg border border-stone-200 bg-white/80 p-3 transition dark:border-[#3a3630] dark:bg-[#1e1c1a]/80 md:grid-cols-[120px_120px_minmax(160px,1.1fr)_120px_120px_minmax(180px,1.2fr)_auto]"
+              className="mb-4 grid gap-2 rounded-xl border border-stone-200/80 bg-white/80 p-3 transition-all duration-300 dark:border-[#3a3630]/80 dark:bg-[#1e1c1a]/80 md:grid-cols-[120px_120px_minmax(160px,1.1fr)_120px_120px_minmax(180px,1.2fr)_auto]"
             >
               <select
                 value={cardForm.day}
                 onChange={(event) => updateCardForm('day', event.target.value)}
-                className="h-10 rounded-md border border-stone-200 bg-white px-3 text-sm text-stone-700 outline-none transition focus:border-stone-400 dark:border-[#3a3630] dark:bg-[#2a2724] dark:text-[#b5afa6] dark:focus:border-[#5a554e]"
+                className="h-10 rounded-lg border border-stone-200/80 bg-white px-3 text-sm text-stone-700 outline-none transition-all duration-200 focus:border-stone-400 dark:border-[#3a3630]/80 dark:bg-[#2a2724] dark:text-[#b5afa6] dark:focus:border-[#5a554e]"
                 aria-label="选择日期"
               >
                 {dayNames.map((day) => (
@@ -1979,7 +2068,7 @@ function App() {
               <select
                 value={cardForm.type}
                 onChange={(event) => updateCardForm('type', event.target.value)}
-                className="h-10 rounded-md border border-stone-200 bg-white px-3 text-sm text-stone-700 outline-none transition focus:border-stone-400 dark:border-[#3a3630] dark:bg-[#2a2724] dark:text-[#b5afa6] dark:focus:border-[#5a554e]"
+                className="h-10 rounded-lg border border-stone-200/80 bg-white px-3 text-sm text-stone-700 outline-none transition-all duration-200 focus:border-stone-400 dark:border-[#3a3630]/80 dark:bg-[#2a2724] dark:text-[#b5afa6] dark:focus:border-[#5a554e]"
                 aria-label="选择类型"
               >
                 {typeOptions.map((type) => (
@@ -1991,7 +2080,7 @@ function App() {
               <input
                 value={cardForm.title}
                 onChange={(event) => updateCardForm('title', event.target.value)}
-                className="h-10 rounded-md border border-stone-200 bg-white px-3 text-sm text-stone-700 outline-none transition placeholder:text-stone-400 focus:border-stone-400 dark:border-[#3a3630] dark:bg-[#2a2724] dark:text-[#b5afa6] dark:placeholder:text-[#5e584f] dark:focus:border-[#5a554e]"
+                className="h-10 rounded-lg border border-stone-200/80 bg-white px-3 text-sm text-stone-700 outline-none transition-all duration-200 placeholder:text-stone-400 focus:border-stone-400 dark:border-[#3a3630]/80 dark:bg-[#2a2724] dark:text-[#b5afa6] dark:placeholder:text-[#5e584f] dark:focus:border-[#5a554e]"
                 placeholder="卡片标题"
               />
               <input
@@ -2001,24 +2090,24 @@ function App() {
                 inputMode="numeric"
                 value={cardForm.cost}
                 onChange={(event) => updateCardForm('cost', event.target.value)}
-                className="h-10 rounded-md border border-stone-200 bg-white px-3 text-sm text-stone-700 outline-none transition placeholder:text-stone-400 focus:border-stone-400 dark:border-[#3a3630] dark:bg-[#2a2724] dark:text-[#b5afa6] dark:placeholder:text-[#5e584f] dark:focus:border-[#5a554e]"
+                className="h-10 rounded-lg border border-stone-200/80 bg-white px-3 text-sm text-stone-700 outline-none transition-all duration-200 placeholder:text-stone-400 focus:border-stone-400 dark:border-[#3a3630]/80 dark:bg-[#2a2724] dark:text-[#b5afa6] dark:placeholder:text-[#5e584f] dark:focus:border-[#5a554e]"
                 placeholder="金额（元）"
               />
               <input
                 value={cardForm.duration}
                 onChange={(event) => updateCardForm('duration', event.target.value)}
-                className="h-10 rounded-md border border-stone-200 bg-white px-3 text-sm text-stone-700 outline-none transition placeholder:text-stone-400 focus:border-stone-400 dark:border-[#3a3630] dark:bg-[#2a2724] dark:text-[#b5afa6] dark:placeholder:text-[#5e584f] dark:focus:border-[#5a554e]"
+                className="h-10 rounded-lg border border-stone-200/80 bg-white px-3 text-sm text-stone-700 outline-none transition-all duration-200 placeholder:text-stone-400 focus:border-stone-400 dark:border-[#3a3630]/80 dark:bg-[#2a2724] dark:text-[#b5afa6] dark:placeholder:text-[#5e584f] dark:focus:border-[#5a554e]"
                 placeholder="耗时"
               />
               <input
                 value={cardForm.advice}
                 onChange={(event) => updateCardForm('advice', event.target.value)}
-                className="h-10 rounded-md border border-stone-200 bg-white px-3 text-sm text-stone-700 outline-none transition placeholder:text-stone-400 focus:border-stone-400 dark:border-[#3a3630] dark:bg-[#2a2724] dark:text-[#b5afa6] dark:placeholder:text-[#5e584f] dark:focus:border-[#5a554e]"
+                className="h-10 rounded-lg border border-stone-200/80 bg-white px-3 text-sm text-stone-700 outline-none transition-all duration-200 placeholder:text-stone-400 focus:border-stone-400 dark:border-[#3a3630]/80 dark:bg-[#2a2724] dark:text-[#b5afa6] dark:placeholder:text-[#5e584f] dark:focus:border-[#5a554e]"
                 placeholder="建议"
               />
               <button
                 type="submit"
-                className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-stone-950 px-4 text-sm font-semibold text-white transition hover:bg-stone-800 dark:bg-[#e8e4df] dark:text-[#141210] dark:hover:bg-[#d8d4cf]"
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-stone-950 px-4 text-sm font-bold text-white shadow-sm transition-all duration-200 hover:bg-stone-800 hover:shadow-md dark:bg-[#e8e4df] dark:text-[#141210] dark:hover:bg-[#d8d4cf]"
               >
                 <Check className="h-4 w-4" />
                 保存
