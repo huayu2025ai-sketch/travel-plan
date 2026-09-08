@@ -1,0 +1,53 @@
+services:
+  travel-plan-api:
+    image: travel-plan-api:${IMAGE_TAG:-latest}
+    build:
+      context: .
+      dockerfile: server/Dockerfile
+    container_name: travel-plan-api
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - API_PORT=8787
+      - TZ=Asia/Shanghai
+      - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:?DEEPSEEK_API_KEY must be set}
+      - DEEPSEEK_BASE_URL=${DEEPSEEK_BASE_URL:-https://api.deepseek.com}
+      - QWEATHER_API_KEY=${QWEATHER_API_KEY:-}
+      - QWEATHER_BASE_URL=${QWEATHER_BASE_URL:-https://devapi.qweather.com/v7}
+      - QWEATHER_GEO_URL=${QWEATHER_GEO_URL:-https://geoapi.qweather.com/v2}
+    expose:
+      - "8787"
+    networks:
+      - npm-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://127.0.0.1:8787/api/health >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  travel-plan:
+    image: travel-plan:${IMAGE_TAG:-latest}
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: travel-plan
+    restart: unless-stopped
+    expose:
+      - "80"
+    depends_on:
+      travel-plan-api:
+        condition: service_healthy
+    networks:
+      - npm-network
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O- http://127.0.0.1/ >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+networks:
+  npm-network:
+    external: true
+    name: ${NPM_NETWORK_NAME:-npm-network}

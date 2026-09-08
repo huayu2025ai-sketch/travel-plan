@@ -1,3 +1,5 @@
+import { maxIdeaCharacters } from './request-guard.js';
+
 const allowedTypes = new Set(['交通', '景点', 'citywalk', '美食', '酒店', '娱乐', '工作']);
 
 const systemPrompt =
@@ -48,11 +50,23 @@ const deepseekTimeoutMs = 60000;
 const maxDeepseekAttempts = 2;
 
 export async function generateTravelPlan(idea, context = {}) {
-  const trimmedIdea = String(idea || '').trim();
+  if (typeof idea !== 'string') {
+    const error = new Error('旅行想法格式不正确。');
+    error.status = 400;
+    throw error;
+  }
+
+  const trimmedIdea = idea.trim();
 
   if (!trimmedIdea) {
     const error = new Error('请输入旅行想法。');
     error.status = 400;
+    throw error;
+  }
+
+  if (trimmedIdea.length > maxIdeaCharacters) {
+    const error = new Error(`旅行想法不能超过 ${maxIdeaCharacters} 个字符。`);
+    error.status = 413;
     throw error;
   }
 
@@ -175,7 +189,7 @@ function buildContextPrompt(context, weatherContext = null, tripContext = null) 
   }
 
   if (weatherContext?.summary) {
-    sections.push(`\n\n真实天气参考（来自 Open-Meteo，请据此调整活动节奏，不要自己编天气）：\n${weatherContext.summary}`);
+    sections.push(`\n\n真实天气参考（来自已配置的天气服务，请据此调整活动节奏，不要自己编天气）：\n${weatherContext.summary}`);
   }
 
   return sections.join('');
@@ -243,21 +257,42 @@ async function buildRealWeatherContext(tripContext) {
     };
   }
 
-  const location = await geocodeDestination(destination);
-  if (!location) {
-    return {
-      summary: '',
-      weatherByDay: {},
-    };
+  let location = null;
+  let forecast = [];
+
+  if (process.env.QWEATHER_API_KEY) {
+    try {
+      location = await geocodeWithQWeather(destination);
+      if (location) {
+        forecast = await fetchQWeatherForecast(location, startDate, dayCount);
+      }
+    } catch (error) {
+      // Fallback to Open-Meteo silently.
+      location = null;
+      forecast = [];
+    }
   }
 
-  const forecast = await fetchDailyForecast(location, startDate, dayCount);
+  if (!forecast || forecast.length === 0) {
+    location = await geocodeDestination(destination);
+    if (!location) {
+      return {
+        summary: '',
+        weatherByDay: {},
+      };
+    }
+    forecast = await fetchDailyForecast(location, startDate, dayCount);
+  }
+
   const weatherByDay = {};
   const summaryLines = [];
 
+  const forecastByDate = new Map((forecast || []).map((item) => [item.date, item]));
+
   for (let index = 0; index < dayCount; index += 1) {
     const dayLabel = `Day ${index + 1}`;
-    const dayWeather = forecast?.[index];
+    const forecastDate = addDaysToDate(startDate, index);
+    const dayWeather = forecastByDate.get(forecastDate);
     const summary = dayWeather ? formatWeatherSummary(dayWeather) : '';
     weatherByDay[dayLabel] = summary;
     if (summary) {
@@ -354,8 +389,81 @@ async function fetchDailyForecast(location, startDate, dayCount) {
   }));
 }
 
+async function geocodeWithQWeather(destination) {
+  const baseUrl = process.env.QWEATHER_GEO_URL || 'https://geoapi.qweather.com/v2';
+  const url = new URL(`${baseUrl}/city/lookup`);
+  url.searchParams.set('key', process.env.QWEATHER_API_KEY);
+  url.searchParams.set('location', destination);
+  url.searchParams.set('range', 'cn');
+
+  const payload = await fetchJsonWithTimeout(url, 10000);
+  if (payload?.code !== '200') return null;
+
+  const results = Array.isArray(payload?.location) ? payload.location : [];
+  if (results.length === 0) return null;
+
+  const best = results[0];
+  return {
+    name: String(best.name || ''),
+    admin1: String(best.adm1 || best.adm2 || ''),
+    country: String(best.country || ''),
+    latitude: Number(best.lat),
+    longitude: Number(best.lon),
+    qweatherId: String(best.id || ''),
+  };
+}
+
+async function fetchQWeatherForecast(location, startDate, dayCount) {
+  if (!location.qweatherId) return [];
+
+  const baseUrl = process.env.QWEATHER_BASE_URL || 'https://devapi.qweather.com/v7';
+  const url = new URL(`${baseUrl}/weather/7d`);
+  url.searchParams.set('key', process.env.QWEATHER_API_KEY);
+  url.searchParams.set('location', location.qweatherId);
+
+  const payload = await fetchJsonWithTimeout(url, 10000);
+  if (payload?.code !== '200') return [];
+
+  const forecastDays = Math.min(16, Math.max(1, dayCount));
+  const requestedDates = Array.from({ length: forecastDays }, (_, index) => addDaysToDate(startDate, index));
+  const daily = Array.isArray(payload?.daily) ? payload.daily : [];
+  const dailyByDate = new Map(daily.map((item) => [item.fxDate, item]));
+
+  // QWeather's /weather/7d cannot cover a longer itinerary. Returning an
+  // empty result here deliberately activates the Open-Meteo fallback.
+  if (requestedDates.some((date) => !dailyByDate.has(date))) return [];
+
+  return requestedDates.map((date) => {
+    const item = dailyByDate.get(date);
+    return {
+    date: item.fxDate,
+    weather_code: item.iconDay,
+    weather_text: item.textDay,
+    temperature_2m_max: item.tempMax,
+    temperature_2m_min: item.tempMin,
+    precipitation_probability_max: null,
+    precipitation_sum: item.precip,
+    };
+  });
+}
+
+async function fetchJsonWithTimeout(url, timeoutMs) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(url, { signal: controller.signal });
+    if (!response.ok) return null;
+    return response.json();
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 function formatWeatherSummary(dayWeather) {
-  const label = weatherCodeToLabel(dayWeather.weather_code);
+  const label = dayWeather.weather_text ? String(dayWeather.weather_text) : weatherCodeToLabel(dayWeather.weather_code);
   const minTemp = Number(dayWeather.temperature_2m_min);
   const maxTemp = Number(dayWeather.temperature_2m_max);
   const precipitationProbability = Number(dayWeather.precipitation_probability_max);

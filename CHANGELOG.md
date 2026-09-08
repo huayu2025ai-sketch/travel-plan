@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### Added
+- Added optional QWeather geocoding and forecast integration for domestic travel planning.
+- Added automatic fallback to Open-Meteo when QWeather is not configured or unavailable.
+- Added regression tests for weather branches, API route behavior, request guards, and key frontend interactions.
+
+### Changed
+- Fixed seven-day weather date mapping by matching forecast records to calendar dates and falling back when QWeather cannot cover the complete itinerary.
+- Split the frontend entry point into `App.jsx`, reusable components, hooks, date/plan/storage/export utilities, and a minimal `main.jsx` mount module.
+- Updated project documentation to reflect the current weather-provider fallback chain, deployment variables, and test coverage.
+- Added open-access API protection with process-local rate limiting, request-size validation, input limits, and consolidated public errors.
+- Added Docker Compose deployment for a static Nginx frontend, Node API container, and shared external `npm-network`.
+
 ## [0.1.1.0] - 2026-06-13
 
 ### Added

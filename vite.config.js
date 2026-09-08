@@ -2,6 +2,14 @@ import 'dotenv/config';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 import { generateTravelPlan } from './server/deepseek.js';
+import {
+  checkGenerateRateLimit,
+  createRateLimitError,
+  logApiError,
+  maxRequestBodyBytes,
+  toPublicApiError,
+  validateGenerateRequest,
+} from './server/request-guard.js';
 
 export default defineConfig({
   plugins: [react(), travelApiPlugin()],
@@ -26,17 +34,24 @@ function travelApiPlugin() {
         }
 
         try {
-          const body = await readJsonBody(req);
+          const rateLimit = checkGenerateRateLimit(req);
+          if (!rateLimit.allowed) {
+            throw createRateLimitError(rateLimit.retryAfterSeconds);
+          }
+
+          const body = validateGenerateRequest(await readJsonBody(req));
           const plan = await generateTravelPlan(body.idea, {
             currentPlan: body.currentPlan,
             history: body.history,
           });
           sendJson(res, 200, plan);
         } catch (error) {
-          sendJson(res, error.status || 500, {
-            error: error.message || '生成行程失败，请稍后重试。',
-            detail: error.detail,
-          });
+          if (error.retryAfterSeconds) {
+            res.setHeader('Retry-After', String(error.retryAfterSeconds));
+          }
+          logApiError('vite/api/generate', error);
+          const publicError = toPublicApiError(error);
+          sendJson(res, publicError.status, publicError.body);
         }
       });
     },
@@ -52,12 +67,23 @@ function sendJson(res, statusCode, data) {
 function readJsonBody(req) {
   return new Promise((resolve, reject) => {
     let raw = '';
+    let settled = false;
 
     req.on('data', (chunk) => {
+      if (settled) return;
       raw += chunk;
+      if (Buffer.byteLength(raw, 'utf8') > maxRequestBodyBytes) {
+        settled = true;
+        req.resume();
+        const error = new Error('请求内容过大，请精简旅行想法或行程上下文。');
+        error.status = 413;
+        reject(error);
+      }
     });
 
     req.on('end', () => {
+      if (settled) return;
+      settled = true;
       try {
         resolve(raw ? JSON.parse(raw) : {});
       } catch {
@@ -67,6 +93,11 @@ function readJsonBody(req) {
       }
     });
 
-    req.on('error', reject);
+    req.on('error', (error) => {
+      if (!settled) {
+        settled = true;
+        reject(error);
+      }
+    });
   });
 }

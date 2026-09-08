@@ -45,16 +45,25 @@ Copy `.env.example` to `.env` and fill in:
 - `DEEPSEEK_API_KEY` — required for AI plan generation.
 - `DEEPSEEK_BASE_URL` — defaults to `https://api.deepseek.com`.
 - `API_PORT` — port for the standalone Express server; defaults to `8787`.
+- `QWEATHER_API_KEY` — optional API key for QWeather (和风天气). When absent or unavailable, the app falls back to Open-Meteo.
+- `QWEATHER_BASE_URL` — defaults to `https://devapi.qweather.com/v7`.
+- `QWEATHER_GEO_URL` — defaults to `https://geoapi.qweather.com/v2`.
+
+When `QWEATHER_API_KEY` is configured, QWeather is preferred for geocoding and forecast data. If the key is missing or a QWeather request fails, the app falls back to Open-Meteo.
 
 Vite loads `.env` automatically in dev mode. The standalone server relies on `dotenv`.
 
 ## High-level architecture
 
-This is a React + Vite frontend with a small Node.js API layer. The entire UI lives in `src/main.jsx`; the API logic lives in `server/deepseek.js` and is exposed through three interchangeable surfaces.
+This is a React + Vite frontend with a small Node.js API layer. `src/main.jsx` only mounts the app; `src/App.jsx` coordinates application state and high-level interactions, while reusable UI, hooks, and utilities live under `src/components/`, `src/hooks/`, and `src/utils/`. The API logic lives in `server/deepseek.js` and is exposed through three interchangeable surfaces.
 
-### Frontend (`src/main.jsx`)
+### Frontend (`src/App.jsx` and modules)
 
-- Single-file React application that renders the planning board, packing list, input forms, and print/export dialogs.
+- `App.jsx` coordinates the planning board, packing list, input forms, and print/export dialogs.
+- `components/ItineraryComponents.jsx` owns the itinerary cards, day columns, and packing list UI.
+- `components/TravelControls.jsx` owns theme and generation-progress controls.
+- `hooks/useTheme.js` owns the theme preference side effect.
+- `utils/date.js`, `utils/plan.js`, `utils/storage.js`, and `utils/export.js` isolate date mapping, plan data, persistence, and export behavior.
 - State is held in React hooks and persisted to `localStorage`:
   - `travel-plan-board-v1` stores the current trip plan.
   - `travel-plan-conversation-v1` stores the recent conversation history used for contextual refinements.
@@ -78,12 +87,12 @@ This is a React + Vite frontend with a small Node.js API layer. The entire UI li
 `generateTravelPlan(idea, context)` is the only public generation function. It performs three steps:
 
 1. **Extract trip context** — calls DeepSeek with a constrained JSON prompt to get `destination`, `start_date`, and `days`.
-2. **Fetch real weather** — geocodes the destination via Open-Meteo, then fetches daily forecast data for the trip range.
+2. **Fetch real weather** — when configured, geocodes the destination with QWeather and fetches its 7-day forecast; otherwise, or when QWeather fails, geocodes with Open-Meteo and fetches its daily forecast for the trip range.
 3. **Generate the plan** — calls DeepSeek again with the extracted context, recent conversation history, current plan (if refining), and the real weather summary; parses the JSON response and normalizes it.
 
 `normalizePlan(parsed, weatherByDay, tripContext)` validates the AI output, fixes malformed card IDs, coerces unknown card types to `景点`, deduplicates IDs, and aligns `weather` keys with `itinerary` days.
 
-Network calls to DeepSeek retry once on 5xx and have a 60-second timeout per attempt.
+DeepSeek calls retry once on 5xx and have a 60-second timeout per attempt. QWeather calls use a 10-second timeout; Open-Meteo calls currently do not have an explicit timeout.
 
 ### API surfaces
 
@@ -95,16 +104,35 @@ The same `generateTravelPlan` function is invoked from three places so the app w
 
 When adding or changing an API route, keep all three surfaces in sync or extract the shared handler.
 
+### Request protection
+
+All users can access the app without registration or a password. The `POST /api/generate` entry points share the guards in `server/request-guard.js`:
+
+- Process-local rate limit: 5 requests per 10 minutes per detected client address.
+- Request body limit: 256 KiB.
+- `idea`: at most 2,000 characters.
+- `history`: at most 8 items, with 800 characters per item.
+- `currentPlan`: at most 128 KiB, 16 days, and 200 itinerary cards.
+- Public API errors omit upstream `detail`; unexpected errors are reduced to a generic message.
+
+The limiter is intentionally dependency-free and process-local. In a multi-instance Vercel deployment, each instance has its own counter; use shared storage if a globally consistent quota is required.
+
 ## Testing
 
 - Framework: Vitest v4 with `globals: true` and default `node` environment.
 - DOM/component tests rely on `jsdom`, `@testing-library/react`, and `@testing-library/jest-dom`.
 - Test files: `tests/**/*.{test,spec}.{js,jsx,ts,tsx}` and `src/**/*.{test,spec}.{js,jsx,ts,tsx}`.
 - Server tests must declare `// @vitest-environment node` at the top of the file.
-- `tests/server/deepseek.test.js` is the primary regression suite for the generation flow. It stubs the global `fetch` to mock DeepSeek and Open-Meteo responses.
+- `tests/server/deepseek.test.js` covers generation flow, retry logic, QWeather date mapping, and the Open-Meteo fallback boundary.
+- `tests/server/request-guard.test.js` covers request validation, rate-limit behavior, and public error shaping.
+- `tests/api/generate.test.js` covers the Vercel route method guard, validation, successful responses, and unexpected-error convergence.
+- `tests/components/App.test.jsx` covers key packing-list and custom-card interactions.
 - CI runs `npm test` on every push and pull request to `master` or `main` via `.github/workflows/test.yml`.
 
 ## Deployment notes
 
-- Vercel: `vercel.json` is configured for Vite. Set `DEEPSEEK_API_KEY` in the Vercel dashboard.
-- Standalone: run `npm run build` then `npm run server`, and serve the `dist/` directory with a reverse proxy.
+- Docker (recommended for production): the root `Dockerfile` builds the Vite frontend and serves it with Nginx; Nginx proxies `/api/` to the `travel-plan-api` Node container on port `8787`. `server/Dockerfile` runs the API container. `docker-compose.yml` attaches both services to the external `npm-network` and does not publish application ports to the host.
+- Nginx Proxy Manager must join the same external network and proxy to `travel-plan:80`. The frontend Nginx preserves the upstream client address headers used by the API rate limiter.
+- Required Docker environment: `DEEPSEEK_API_KEY`. Optional weather variables are `QWEATHER_API_KEY`, `QWEATHER_BASE_URL`, and `QWEATHER_GEO_URL`; without the key, weather falls back to Open-Meteo.
+- Vercel remains supported through `vercel.json` and `api/`, but is not the primary deployment path.
+- Local standalone: run `npm run build` then `npm run server`, and serve the `dist/` directory with a reverse proxy.

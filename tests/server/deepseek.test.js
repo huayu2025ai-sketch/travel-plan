@@ -23,6 +23,7 @@ describe('generateTravelPlan', () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     delete process.env.DEEPSEEK_API_KEY;
+    delete process.env.QWEATHER_API_KEY;
   });
 
   it('rejects with a 400 error when idea is empty', async () => {
@@ -348,6 +349,133 @@ describe('generateTravelPlan', () => {
       status: 502,
       message: expect.stringContaining('DeepSeek API'),
     });
+  });
+
+  it('maps QWeather forecast records by date', async () => {
+    process.env.QWEATHER_API_KEY = 'qweather-test-key';
+    const fetchMock = vi.fn().mockImplementation(async (input, options) => {
+      const url = getRequestUrl(input);
+
+      if (url.includes('deepseek.com')) {
+        const requestBody = JSON.parse(options.body);
+        const systemPrompt = requestBody.messages?.[0]?.content || '';
+        if (systemPrompt.includes('旅游信息抽取助手')) {
+          return createJsonResponse({
+            choices: [{ message: { content: JSON.stringify({ destination: '北京', start_date: '2026-10-21', days: 2 }) } }],
+          });
+        }
+        return createJsonResponse({
+          choices: [{
+            message: {
+              content: JSON.stringify({
+                destination: '北京',
+                start_date: '2026-10-21',
+                itinerary: { 'Day 1': [{ title: '故宫' }], 'Day 2': [{ title: '颐和园' }] },
+              }),
+            },
+          }],
+        });
+      }
+
+      if (url.includes('geoapi.qweather.com')) {
+        return createJsonResponse({
+          code: '200',
+          location: [{ id: '101010100', name: '北京', adm1: '北京市', country: '中国', lat: '39.9042', lon: '116.4074' }],
+        });
+      }
+
+      if (url.includes('devapi.qweather.com')) {
+        return createJsonResponse({
+          code: '200',
+          daily: [
+            { fxDate: '2026-10-22', textDay: '小雨', tempMax: '28', tempMin: '20', precip: '2.0', iconDay: ' rain' },
+            { fxDate: '2026-10-21', textDay: '晴', tempMax: '26', tempMin: '18', precip: '0', iconDay: '100' },
+          ],
+        });
+      }
+
+      throw new Error(`unexpected fetch url: ${url}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await generateTravelPlan('北京两日游', {});
+
+    expect(result.weather).toEqual({
+      'Day 1': '晴 18-26°C',
+      'Day 2': '小雨 20-28°C 降水2.0mm',
+    });
+    expect(fetchMock.mock.calls.some(([input]) => getRequestUrl(input).includes('devapi.qweather.com'))).toBe(true);
+  });
+
+  it('falls back to Open-Meteo when QWeather cannot cover the full itinerary', async () => {
+    process.env.QWEATHER_API_KEY = 'qweather-test-key';
+    const eightDayItinerary = Object.fromEntries(
+      Array.from({ length: 8 }, (_, index) => [`Day ${index + 1}`, [{ title: `行程 ${index + 1}` }]]),
+    );
+    const fetchMock = vi.fn().mockImplementation(async (input, options) => {
+      const url = getRequestUrl(input);
+
+      if (url.includes('deepseek.com')) {
+        const requestBody = JSON.parse(options.body);
+        const systemPrompt = requestBody.messages?.[0]?.content || '';
+        if (systemPrompt.includes('旅游信息抽取助手')) {
+          return createJsonResponse({
+            choices: [{ message: { content: JSON.stringify({ destination: '北京', start_date: '2026-10-21', days: 8 }) } }],
+          });
+        }
+        return createJsonResponse({
+          choices: [{ message: { content: JSON.stringify({ destination: '北京', start_date: '2026-10-21', itinerary: eightDayItinerary }) } }],
+        });
+      }
+
+      if (url.includes('geoapi.qweather.com')) {
+        return createJsonResponse({
+          code: '200',
+          location: [{ id: '101010100', name: '北京', adm1: '北京市', country: '中国', lat: '39.9042', lon: '116.4074' }],
+        });
+      }
+
+      if (url.includes('devapi.qweather.com')) {
+        return createJsonResponse({
+          code: '200',
+          daily: Array.from({ length: 7 }, (_, index) => ({
+            fxDate: `2026-10-${String(21 + index).padStart(2, '0')}`,
+            textDay: '晴',
+            tempMax: '26',
+            tempMin: '18',
+            precip: '0',
+            iconDay: '100',
+          })),
+        });
+      }
+
+      if (url.includes('geocoding-api.open-meteo.com')) {
+        return createJsonResponse({
+          results: [{ name: '北京', admin1: '北京市', country: '中国', latitude: 39.9042, longitude: 116.4074 }],
+        });
+      }
+
+      if (url.includes('api.open-meteo.com/v1/forecast')) {
+        return createJsonResponse({
+          daily: {
+            time: Array.from({ length: 8 }, (_, index) => `2026-10-${String(21 + index).padStart(2, '0')}`),
+            weather_code: Array(8).fill(0),
+            temperature_2m_max: Array.from({ length: 8 }, (_, index) => 26 + index),
+            temperature_2m_min: Array(8).fill(18),
+            precipitation_probability_max: Array(8).fill(0),
+            precipitation_sum: Array(8).fill(0),
+          },
+        });
+      }
+
+      throw new Error(`unexpected fetch url: ${url}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const result = await generateTravelPlan('北京八日游', {});
+
+    expect(result.weather['Day 8']).toBe('晴 18-33°C');
+    expect(fetchMock.mock.calls.some(([input]) => getRequestUrl(input).includes('api.open-meteo.com/v1/forecast'))).toBe(true);
   });
 });
 

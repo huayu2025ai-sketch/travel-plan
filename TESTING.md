@@ -1,6 +1,6 @@
 # Testing
 
-100% test coverage is the key to great vibe coding. Tests let you move fast, trust your instincts, and ship with confidence — without them, vibe coding is just yolo coding. With tests, it's a superpower.
+The project uses a Vitest regression suite covering the server-side AI generation flow, API route behavior, weather-provider branches, and key frontend interactions. Tests should cover behavior and external-service failure paths as features are added.
 
 ## Framework
 
@@ -20,9 +20,15 @@ npm test
 | Layer | What | Where | When |
 |-------|------|-------|------|
 | Unit | Pure functions, helpers, utilities | `tests/**/*.test.js` | Every change |
-| Integration | API route handlers, service boundaries | `tests/server/**/*.test.js` | When touching server code |
-| Smoke | App starts and renders without crashing | `tests/smoke/*.test.js` | Before deploys |
-| E2E | (not set up yet) Full user flows | `e2e/` | Add when user flows stabilize |
+| Integration | AI generation flow and service boundaries | `tests/server/**/*.test.js` | When touching server code |
+| Route | API method, validation, and public error behavior | `tests/api/**/*.test.js` | When touching API entry points |
+| Component | Critical user interactions | `tests/components/**/*.test.jsx` | When touching frontend behavior |
+| Smoke | App starts and renders without crashing | Not implemented yet | Add before deploys |
+| E2E | Full user flows | Not implemented yet | Add when user flows stabilize |
+
+## Current coverage
+
+The current suite contains four test files and 29 cases. `tests/server/deepseek.test.js` covers DeepSeek response normalization, retry behavior, context injection, QWeather date mapping, and the Open-Meteo fallback boundary. `tests/server/request-guard.test.js` covers request validation, rate-limit behavior, and public error shaping. `tests/api/generate.test.js` covers the Vercel route handler, and `tests/components/App.test.jsx` covers packing-list and custom-card interactions. Smoke and full browser E2E tests are not yet implemented.
 
 ## Conventions
 
