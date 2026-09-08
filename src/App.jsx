@@ -6,28 +6,18 @@ import {
   ArrowRight,
   Backpack,
   Check,
-  CalendarDays,
   ChevronDown,
-  Clock3,
   Coins,
-  Copy,
   Download,
   FileText,
   FileUp,
-  GripVertical,
   ImageDown,
   LoaderCircle,
-  Moon,
-  Pencil,
-  Plane,
   Plus,
   Route,
-  Search,
   SlidersHorizontal,
   Sparkles,
-  Sun,
   TrainFront,
-  Trash2,
   X,
 } from 'lucide-react';
 import { LoadingProgress, ThemeToggle } from './components/TravelControls.jsx';
@@ -183,15 +173,6 @@ const generationStages = [
   '校验 JSON 并生成看板',
 ];
 
-function escapeHtml(value) {
-  return String(value)
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#039;');
-}
-
 function getPrintTypeMeta(type) {
   const meta = {
     交通: { icon: 'T', color: '#0284c7', bg: '#e0f2fe', label: '交通', imageTitle: '出发路上' },
@@ -204,351 +185,6 @@ function getPrintTypeMeta(type) {
   };
 
   return meta[type] || { icon: 'P', color: '#57534e', bg: '#f5f5f4', label: type || '行程', imageTitle: '旅途片刻' };
-}
-
-function buildGuideImageDataUri(item, day, index) {
-  const meta = getPrintTypeMeta(item.type);
-  const title = escapeHtml(item.title).slice(0, 18);
-  const dayLabel = escapeHtml(day);
-  const imageLabel = escapeHtml(meta.imageTitle);
-  const color = meta.color;
-  const bg = meta.bg;
-  const shapeMap = {
-    交通: `
-      <path d="M82 206 C165 172, 263 168, 418 195" fill="none" stroke="${color}" stroke-width="16" stroke-linecap="round" opacity=".35"/>
-      <rect x="128" y="120" width="230" height="58" rx="29" fill="#ffffff" opacity=".88"/>
-      <circle cx="176" cy="184" r="15" fill="${color}"/><circle cx="310" cy="184" r="15" fill="${color}"/>
-      <path d="M171 120 L236 82 L326 120" fill="none" stroke="${color}" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
-    `,
-    景点: `
-      <path d="M72 224 L172 94 L246 224 Z" fill="${color}" opacity=".18"/>
-      <path d="M180 224 L306 62 L434 224 Z" fill="${color}" opacity=".28"/>
-      <circle cx="376" cy="82" r="35" fill="#fbbf24" opacity=".9"/>
-      <path d="M118 224 C178 188, 244 188, 304 224" fill="none" stroke="${color}" stroke-width="12" stroke-linecap="round"/>
-    `,
-    citywalk: `
-      <rect x="84" y="98" width="76" height="132" rx="10" fill="${color}" opacity=".18"/>
-      <rect x="182" y="72" width="92" height="158" rx="12" fill="${color}" opacity=".28"/>
-      <rect x="302" y="112" width="92" height="118" rx="12" fill="${color}" opacity=".2"/>
-      <path d="M86 246 C148 214, 240 214, 416 244" fill="none" stroke="${color}" stroke-width="13" stroke-linecap="round"/>
-    `,
-    美食: `
-      <circle cx="244" cy="158" r="76" fill="#ffffff" opacity=".86"/>
-      <circle cx="244" cy="158" r="48" fill="${bg}" stroke="${color}" stroke-width="8"/>
-      <path d="M122 86 L122 222" stroke="${color}" stroke-width="12" stroke-linecap="round"/>
-      <path d="M356 84 C328 118, 328 162, 358 194 L358 222" fill="none" stroke="${color}" stroke-width="12" stroke-linecap="round"/>
-    `,
-    酒店: `
-      <rect x="96" y="118" width="300" height="92" rx="18" fill="#ffffff" opacity=".86"/>
-      <rect x="120" y="92" width="134" height="78" rx="14" fill="${color}" opacity=".2"/>
-      <rect x="266" y="92" width="104" height="78" rx="14" fill="${color}" opacity=".28"/>
-      <path d="M96 210 L396 210 L396 238 L96 238 Z" fill="${color}" opacity=".55"/>
-    `,
-    娱乐: `
-      <circle cx="154" cy="116" r="34" fill="${color}" opacity=".22"/>
-      <circle cx="340" cy="98" r="28" fill="#fbbf24" opacity=".86"/>
-      <path d="M142 194 C188 116, 300 116, 354 194" fill="none" stroke="${color}" stroke-width="14" stroke-linecap="round"/>
-      <path d="M176 196 L156 228 M320 196 L340 228" stroke="${color}" stroke-width="12" stroke-linecap="round"/>
-      <path d="M214 166 L234 186 L274 144" fill="none" stroke="${color}" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"/>
-    `,
-    工作: `
-      <rect x="102" y="92" width="248" height="154" rx="16" fill="#ffffff" opacity=".9"/>
-      <path d="M144 92 V70 H310 V92" fill="none" stroke="${color}" stroke-width="12" stroke-linecap="round"/>
-      <rect x="132" y="118" width="184" height="18" rx="9" fill="${color}" opacity=".18"/>
-      <rect x="132" y="154" width="138" height="18" rx="9" fill="${color}" opacity=".28"/>
-      <rect x="132" y="190" width="162" height="18" rx="9" fill="${color}" opacity=".22"/>
-    `,
-  };
-
-  const svg = `
-    <svg xmlns="http://www.w3.org/2000/svg" width="520" height="300" viewBox="0 0 520 300">
-      <defs>
-        <linearGradient id="g" x1="0" x2="1" y1="0" y2="1">
-          <stop offset="0%" stop-color="${bg}"/>
-          <stop offset="55%" stop-color="#fff7ed"/>
-          <stop offset="100%" stop-color="#ffffff"/>
-        </linearGradient>
-        <pattern id="p" width="28" height="28" patternUnits="userSpaceOnUse">
-          <path d="M0 28 L28 0" stroke="${color}" stroke-width="1" opacity=".12"/>
-        </pattern>
-      </defs>
-      <rect width="520" height="300" rx="34" fill="url(#g)"/>
-      <rect width="520" height="300" rx="34" fill="url(#p)"/>
-      <circle cx="430" cy="62" r="78" fill="${color}" opacity=".12"/>
-      <circle cx="74" cy="246" r="56" fill="${color}" opacity=".10"/>
-      ${shapeMap[item.type] || shapeMap.景点}
-      <text x="34" y="48" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="18" font-weight="800" fill="${color}">${dayLabel} · ${imageLabel}</text>
-      <text x="34" y="272" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="22" font-weight="900" fill="#1c1917">${title}</text>
-      <text x="456" y="268" text-anchor="middle" font-family="PingFang SC, Microsoft YaHei, sans-serif" font-size="42" font-weight="900" fill="${color}" opacity=".55">${index + 1}</text>
-    </svg>
-  `;
-
-  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
-}
-
-function buildPrintHtml(plan) {
-  const entries = Object.entries(plan.itinerary);
-  const allItems = getAllItems(plan.itinerary);
-  const dayCount = entries.length;
-  const itemCount = allItems.length;
-  const typeCounts = typeOptions
-    .map((type) => ({ type, count: allItems.filter((item) => item.type === type).length }))
-    .filter(({ count }) => count > 0);
-
-  const exportDate = new Date().toLocaleDateString('zh-CN', {
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric',
-  });
-  const typeLegendHtml = typeCounts
-    .map(({ type, count }) => {
-      const meta = getPrintTypeMeta(type);
-      return `
-        <span class="legend-chip" style="--type-color:${meta.color};--type-bg:${meta.bg};">
-          <i>${meta.icon}</i>${escapeHtml(meta.label)} <b>${count}</b>
-        </span>
-      `;
-    })
-    .join('');
-
-  const daysHtml = entries
-    .map(([day, items]) => {
-      const dateInfo = getDayDateInfo(plan.start_date, day);
-      const itemsHtml = items.length
-        ? items
-            .map((item, index) => {
-              const meta = getPrintTypeMeta(item.type);
-              return `
-                <article class="itinerary-item" style="--type-color:${meta.color};--type-bg:${meta.bg};">
-                  <div class="item-index">${String(index + 1).padStart(2, '0')}</div>
-                  <div class="item-main">
-                    <div class="item-topline">
-                      <span class="type-chip"><i>${meta.icon}</i>${escapeHtml(meta.label)}</span>
-                      <span class="item-meta">费用 ${escapeHtml(item.cost)} · ${escapeHtml(item.duration)}</span>
-                    </div>
-                    <h3>${escapeHtml(item.title)}</h3>
-                    <p>${escapeHtml(item.advice)}</p>
-                  </div>
-                </article>
-              `;
-            })
-            .join('')
-        : '<div class="empty">暂无行程安排</div>';
-
-      return `
-        <section class="day">
-          <div class="day-title">
-            <div>
-              <span>DAY ${parseDayNumber(day)}</span>
-              <h2>${escapeHtml(day)}</h2>
-            </div>
-            ${dateInfo.displayText ? `<strong class="${dateInfo.dayType}">${escapeHtml(dateInfo.displayText)}</strong>` : ''}
-            ${plan.weather?.[day]?.trim() ? `<p class="day-weather ${dateInfo.dayType}">${escapeHtml(plan.weather[day].trim())}</p>` : ''}
-          </div>
-          ${itemsHtml}
-        </section>
-      `;
-    })
-    .join('');
-
-  return `
-    <!doctype html>
-    <html lang="zh-CN">
-      <head>
-        <meta charset="utf-8" />
-        <title>AI 旅行规划</title>
-        <style>
-          * { box-sizing: border-box; }
-          @page { margin: 10mm; size: A4; }
-          body {
-            margin: 0;
-            padding: 0;
-            color: #1c1917;
-            font-family: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", "Source Han Sans SC", sans-serif;
-            background: #ffffff;
-          }
-          .page {
-            width: 794px;
-            min-height: 1123px;
-            padding: 34px 38px;
-            background: #ffffff;
-          }
-          .header {
-            display: flex;
-            align-items: flex-start;
-            justify-content: space-between;
-            gap: 24px;
-            padding: 24px;
-            border-radius: 22px;
-            color: #fff;
-            background: linear-gradient(135deg, #0f766e 0%, #0f172a 100%);
-          }
-          .eyebrow { margin: 0 0 8px; color: rgba(255,255,255,.72); font-size: 12px; font-weight: 800; letter-spacing: .16em; }
-          h1 { margin: 0; font-size: 34px; line-height: 1.18; letter-spacing: -.02em; }
-          .header-note { margin: 12px 0 0; color: rgba(255,255,255,.76); font-size: 13px; line-height: 1.7; }
-          .generated { min-width: 150px; text-align: right; color: rgba(255,255,255,.78); font-size: 12px; font-weight: 700; }
-          .summary {
-            display: grid;
-            grid-template-columns: repeat(4, minmax(0, 1fr));
-            gap: 10px;
-            margin: 18px 0;
-          }
-          .summary-card {
-            min-height: 78px;
-            border: 1px solid #e7e5e4;
-            border-radius: 14px;
-            padding: 12px;
-            background: #fafaf9;
-          }
-          .summary-card p { margin: 0 0 6px; color: #78716c; font-size: 11px; font-weight: 800; letter-spacing: .08em; }
-          .summary-card strong { color: #1c1917; font-size: 16px; line-height: 1.35; }
-          .legend {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
-            margin: 0 0 18px;
-          }
-          .legend-chip {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            border: 1px solid rgba(120,113,108,.2);
-            border-radius: 999px;
-            padding: 6px 10px;
-            background: var(--type-bg);
-            color: var(--type-color);
-            font-size: 11px;
-            font-weight: 800;
-          }
-          .legend-chip i,
-          .type-chip i {
-            display: inline-grid;
-            place-items: center;
-            width: 18px;
-            height: 18px;
-            border-radius: 999px;
-            background: var(--type-color);
-            color: #fff;
-            font-style: normal;
-            font-size: 10px;
-          }
-          .legend-chip b { color: #1c1917; }
-          .day {
-            break-inside: avoid;
-            page-break-inside: avoid;
-            margin-top: 18px;
-          }
-          .day-title {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 16px;
-            padding: 12px 14px;
-            border-radius: 14px;
-            background: #1c1917;
-            color: #fff;
-          }
-          .day-title span { display: block; color: rgba(255,255,255,.58); font-size: 10px; font-weight: 900; letter-spacing: .18em; }
-          .day-title h2 { margin: 2px 0 0; font-size: 20px; line-height: 1.1; }
-          .day-title strong {
-            flex: 0 0 auto;
-            border-radius: 999px;
-            padding: 6px 10px;
-            font-size: 11px;
-            background: rgba(255,255,255,.12);
-          }
-          .day-title strong.weekday { color: #a7f3d0; }
-          .day-title strong.weekend { color: #fde68a; }
-          .day-weather {
-            margin: 6px 0 0;
-            font-size: 11px;
-            font-weight: 700;
-            letter-spacing: .01em;
-          }
-          .day-weather.weekday { color: #86efac; }
-          .day-weather.weekend { color: #fcd34d; }
-          .itinerary-item {
-            display: grid;
-            grid-template-columns: 46px 1fr;
-            gap: 12px;
-            break-inside: avoid;
-            margin: 10px 0 0;
-            padding: 14px;
-            border: 1px solid #e7e5e4;
-            border-radius: 14px;
-            background: #fff;
-          }
-          .item-index {
-            display: grid;
-            place-items: center;
-            width: 36px;
-            height: 36px;
-            border-radius: 12px;
-            background: var(--type-bg);
-            color: var(--type-color);
-            font-weight: 800;
-          }
-          .item-topline { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-          .type-chip {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            border-radius: 999px;
-            padding: 4px 9px 4px 5px;
-            color: var(--type-color);
-            background: var(--type-bg);
-            font-size: 11px;
-            font-weight: 800;
-          }
-          .item-meta { color: #57534e; font-size: 12px; font-weight: 700; }
-          .itinerary-item h3 { margin: 8px 0 6px; color: #1c1917; font-size: 17px; line-height: 1.35; }
-          .itinerary-item p { margin: 0; color: #57534e; font-size: 12px; line-height: 1.65; }
-          .empty {
-            margin-top: 10px;
-            border: 1px dashed #d6d3d1;
-            border-radius: 12px;
-            padding: 14px;
-            color: #a8a29e;
-            background: #fafaf9;
-          }
-          .footer { margin-top: 24px; padding-top: 12px; border-top: 1px solid #e7e5e4; color: #a8a29e; text-align: center; font-size: 10px; }
-        </style>
-      </head>
-      <body>
-        <main class="page">
-          <section class="header">
-            <div>
-              <p class="eyebrow">AI TRAVEL PLAN</p>
-              <h1>旅行行程单</h1>
-              <p class="header-note">按天整理交通、景点、餐饮、住宿与娱乐安排，适合打印携带或分享给同行人。</p>
-            </div>
-            <div class="generated">生成日期<br>${escapeHtml(exportDate)}</div>
-          </section>
-          <section class="summary">
-              <div class="summary-card">
-                <p class="label">预算预估</p>
-                <strong>${escapeHtml(plan.total_budget_estimate)}</strong>
-              </div>
-              <div class="summary-card">
-                <p class="label">推荐交通</p>
-                <strong>${escapeHtml(plan.recommended_transport)}</strong>
-              </div>
-              <div class="summary-card">
-                <p class="label">规划天数</p>
-                <strong>${dayCount} 天</strong>
-              </div>
-              <div class="summary-card">
-                <p class="label">行程项目</p>
-                <strong>${itemCount} 项</strong>
-              </div>
-          </section>
-          ${typeLegendHtml ? `<section class="legend">${typeLegendHtml}</section>` : ''}
-          ${daysHtml}
-          <div class="footer">由 AI 旅游规划看板生成</div>
-        </main>
-      </body>
-    </html>
-  `;
 }
 
 function roundRect(ctx, x, y, width, height, radius) {
@@ -1044,7 +680,9 @@ function App() {
       setConversationHistory((currentHistory) =>
         [
           ...currentHistory,
-          { role: 'user', content: trimmedIdea },
+          // 与服务端 request-guard 的 maxHistoryContentCharacters 对齐：
+          // 超长内容截断入历史，避免之后每次优化请求都被 413 拒绝。
+          { role: 'user', content: trimmedIdea.slice(0, 800) },
           {
             role: 'assistant',
             content: `已生成/优化 ${Object.keys(nextPlan.itinerary).length} 天、${getAllItems(nextPlan.itinerary).length} 项行程。`,
@@ -1427,6 +1065,7 @@ function App() {
               className="mt-2 h-28 w-full resize-none rounded-lg border border-stone-200/80 bg-white px-3 py-2.5 text-sm leading-6 text-stone-700 outline-none ring-0 transition-all duration-200 placeholder:text-stone-400 focus:border-stone-400 dark:border-[#3a3630]/80 dark:bg-[#2a2724] dark:text-[#b5afa6] dark:placeholder:text-[#5e584f] dark:focus:border-[#5a554e]"
               value={idea}
               onChange={(event) => setIdea(event.target.value)}
+              maxLength={2000}
               disabled={isGenerating}
             />
             {error ? (

@@ -1,4 +1,4 @@
-import { maxIdeaCharacters } from './request-guard.js';
+import { createPublicError, maxIdeaCharacters } from './request-guard.js';
 
 const allowedTypes = new Set(['交通', '景点', 'citywalk', '美食', '酒店', '娱乐', '工作']);
 
@@ -51,29 +51,21 @@ const maxDeepseekAttempts = 2;
 
 export async function generateTravelPlan(idea, context = {}) {
   if (typeof idea !== 'string') {
-    const error = new Error('旅行想法格式不正确。');
-    error.status = 400;
-    throw error;
+    throw createPublicError('旅行想法格式不正确。', 400);
   }
 
   const trimmedIdea = idea.trim();
 
   if (!trimmedIdea) {
-    const error = new Error('请输入旅行想法。');
-    error.status = 400;
-    throw error;
+    throw createPublicError('请输入旅行想法。', 400);
   }
 
   if (trimmedIdea.length > maxIdeaCharacters) {
-    const error = new Error(`旅行想法不能超过 ${maxIdeaCharacters} 个字符。`);
-    error.status = 413;
-    throw error;
+    throw createPublicError(`旅行想法不能超过 ${maxIdeaCharacters} 个字符。`, 413);
   }
 
   if (!process.env.DEEPSEEK_API_KEY) {
-    const error = new Error('缺少 DEEPSEEK_API_KEY，请先在 .env 或终端环境变量中配置。');
-    error.status = 500;
-    throw error;
+    throw createPublicError('缺少 DEEPSEEK_API_KEY，请先在 .env 或终端环境变量中配置。', 500);
   }
 
   const deepseekBaseUrl = process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com';
@@ -100,10 +92,7 @@ export async function generateTravelPlan(idea, context = {}) {
 
   if (!response.ok) {
     const detail = await response.text();
-    const error = new Error('DeepSeek 请求失败。');
-    error.status = response.status;
-    error.detail = detail;
-    throw error;
+    throw createDeepseekHttpError(response.status, detail);
   }
 
   const payload = await response.json();
@@ -113,9 +102,7 @@ export async function generateTravelPlan(idea, context = {}) {
   try {
     parsed = JSON.parse(content);
   } catch {
-    const error = new Error('DeepSeek 返回的内容不是有效 JSON，请稍后重试。');
-    error.status = 502;
-    throw error;
+    throw createPublicError('DeepSeek 返回的内容不是有效 JSON，请稍后重试。', 502);
   }
 
   return normalizePlan(parsed, weatherContext.weatherByDay, tripContext);
@@ -149,10 +136,7 @@ async function extractTripContext(idea, context, deepseekBaseUrl) {
 
   if (!response.ok) {
     const detail = await response.text();
-    const error = new Error('DeepSeek 目的地抽取失败。');
-    error.status = response.status;
-    error.detail = detail;
-    throw error;
+    throw createDeepseekHttpError(response.status, detail);
   }
 
   const payload = await response.json();
@@ -274,14 +258,26 @@ async function buildRealWeatherContext(tripContext) {
   }
 
   if (!forecast || forecast.length === 0) {
-    location = await geocodeDestination(destination);
-    if (!location) {
+    try {
+      // QWeather 已解析出坐标时直接复用，避免对同一目的地再做一次地理编码。
+      if (!location) {
+        location = await geocodeDestination(destination);
+      }
+      if (location) {
+        forecast = await fetchDailyForecast(location, startDate, dayCount);
+      }
+    } catch {
+      // 天气是尽力而为的增强信息，获取失败不应阻断行程生成。
+      location = null;
+      forecast = [];
+    }
+
+    if (!location || !forecast || forecast.length === 0) {
       return {
         summary: '',
         weatherByDay: {},
       };
     }
-    forecast = await fetchDailyForecast(location, startDate, dayCount);
   }
 
   const weatherByDay = {};
@@ -316,7 +312,7 @@ async function geocodeDestination(destination) {
   url.searchParams.set('language', 'zh');
   url.searchParams.set('format', 'json');
 
-  const response = await fetch(url);
+  const response = await fetchWithTimeout(url);
   if (!response.ok) return null;
 
   const payload = await response.json();
@@ -367,7 +363,7 @@ async function fetchDailyForecast(location, startDate, dayCount) {
   url.searchParams.set('start_date', startDate);
   url.searchParams.set('end_date', endDate);
 
-  const response = await fetch(url);
+  const response = await fetchWithTimeout(url);
   if (!response.ok) return [];
 
   const payload = await response.json();
@@ -447,18 +443,24 @@ async function fetchQWeatherForecast(location, startDate, dayCount) {
   });
 }
 
-async function fetchJsonWithTimeout(url, timeoutMs) {
+async function fetchWithTimeout(url, timeoutMs = 10000) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const response = await fetch(url, { signal: controller.signal });
-    if (!response.ok) return null;
-    return response.json();
-  } catch {
-    return null;
+    return await fetch(url, { signal: controller.signal });
   } finally {
     clearTimeout(timeout);
+  }
+}
+
+async function fetchJsonWithTimeout(url, timeoutMs) {
+  try {
+    const response = await fetchWithTimeout(url, timeoutMs);
+    if (!response.ok) return null;
+    return await response.json();
+  } catch {
+    return null;
   }
 }
 
@@ -504,6 +506,23 @@ function weatherCodeToLabel(code) {
   return '天气';
 }
 
+// DeepSeek 上游错误映射为可对用户展示的消息（不含上游响应体内容），detail 仅进日志。
+function createDeepseekHttpError(status, detail) {
+  const friendlyMessages = {
+    401: 'DeepSeek API Key 无效或已过期，请检查配置。',
+    402: 'DeepSeek 账户余额不足，请充值后重试。',
+    422: 'DeepSeek 拒绝了请求参数，请调整输入后重试。',
+    429: 'DeepSeek 请求频率超限，请稍后重试。',
+    503: 'DeepSeek 服务暂不可用，请稍后重试。',
+  };
+
+  const error = new Error(friendlyMessages[status] || 'DeepSeek 请求失败，请稍后重试。');
+  error.status = Number.isInteger(status) && status >= 400 && status <= 599 ? status : 502;
+  error.expose = true;
+  error.detail = typeof detail === 'string' ? detail : '';
+  return error;
+}
+
 async function requestDeepSeek(url, options) {
   let lastError;
 
@@ -530,6 +549,7 @@ async function requestDeepSeek(url, options) {
             : '无法连接 DeepSeek API，请检查网络、代理或 Vercel 环境变量后重试。',
         );
         friendlyError.status = 502;
+        friendlyError.expose = true;
         friendlyError.detail = error.message;
         throw friendlyError;
       }

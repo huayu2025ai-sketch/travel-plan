@@ -10,6 +10,8 @@ services:
       - NODE_ENV=production
       - API_PORT=8787
       - TZ=Asia/Shanghai
+      # 前端 Nginx 会用 realip 校正后的地址覆写 X-Real-IP，因此 API 容器可以信任代理头。
+      - TRUST_PROXY=1
       - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:?DEEPSEEK_API_KEY must be set}
       - DEEPSEEK_BASE_URL=${DEEPSEEK_BASE_URL:-https://api.deepseek.com}
       - QWEATHER_API_KEY=${QWEATHER_API_KEY:-}

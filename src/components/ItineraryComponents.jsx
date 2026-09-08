@@ -306,25 +306,27 @@ export function DayColumn({
             }`}
           >
             {items.length > 0 ? (
-              items.map((item, index) =>
-                isFilteredView ? (
-                  <TripCard
-                    key={item.id}
-                    item={item}
-                    isDragging={false}
-                    pendingDeleteId={pendingDeleteId}
-                    editingCardId={editingCardId}
-                    editForm={editForm}
-                    onStartEdit={() => onStartEdit(item)}
-                    onEditField={onEditField}
-                    onSaveEdit={() => onSaveEdit(day, item.id)}
-                    onCancelEdit={onCancelEdit}
-                    onDuplicate={() => onDuplicate(day, item.id)}
-                    onRequestDelete={() => onRequestDelete(item.id)}
-                    onConfirmDelete={() => onConfirmDelete(day, item.id)}
-                    onCancelDelete={onCancelDelete}
-                  />
-                ) : (
+              items.map((item, index) => {
+                const cardProps = {
+                  item,
+                  pendingDeleteId,
+                  editingCardId,
+                  editForm,
+                  onStartEdit: () => onStartEdit(item),
+                  onEditField,
+                  onSaveEdit: () => onSaveEdit(day, item.id),
+                  onCancelEdit,
+                  onDuplicate: () => onDuplicate(day, item.id),
+                  onRequestDelete: () => onRequestDelete(item.id),
+                  onConfirmDelete: () => onConfirmDelete(day, item.id),
+                  onCancelDelete,
+                };
+
+                if (isFilteredView) {
+                  return <TripCard key={item.id} {...cardProps} isDragging={false} />;
+                }
+
+                return (
                   <Draggable key={item.id} draggableId={item.id} index={index}>
                     {(dragProvided, dragSnapshot) => (
                       <div
@@ -333,26 +335,12 @@ export function DayColumn({
                         {...dragProvided.dragHandleProps}
                         style={dragProvided.draggableProps.style}
                       >
-                        <TripCard
-                          item={item}
-                          isDragging={dragSnapshot.isDragging}
-                          pendingDeleteId={pendingDeleteId}
-                          editingCardId={editingCardId}
-                          editForm={editForm}
-                          onStartEdit={() => onStartEdit(item)}
-                          onEditField={onEditField}
-                          onSaveEdit={() => onSaveEdit(day, item.id)}
-                          onCancelEdit={onCancelEdit}
-                          onDuplicate={() => onDuplicate(day, item.id)}
-                          onRequestDelete={() => onRequestDelete(item.id)}
-                          onConfirmDelete={() => onConfirmDelete(day, item.id)}
-                          onCancelDelete={onCancelDelete}
-                        />
+                        <TripCard {...cardProps} isDragging={dragSnapshot.isDragging} />
                       </div>
                     )}
                   </Draggable>
-                ),
-              )
+                );
+              })
             ) : (
               <div className="empty-droppable flex flex-1 items-center justify-center rounded-xl border border-dashed border-stone-300/60 bg-white/40 p-6 text-center dark:border-[#4a453e]/60 dark:bg-[#1e1c1a]/40">
                 <div>

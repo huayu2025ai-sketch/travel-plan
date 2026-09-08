@@ -102,18 +102,17 @@ The same `generateTravelPlan` function is invoked from three places so the app w
 - `server/index.js` — Express app exposing the same two routes; used for standalone production hosting.
 - `api/generate.js` and `api/health.js` — Vercel serverless function handlers.
 
-When adding or changing an API route, keep all three surfaces in sync or extract the shared handler.
+The full `/api/generate` pipeline (body reading, rate limiting, validation, generation, error shaping) lives in the shared `server/generate-handler.js`, which all three surfaces call. Keep the surfaces limited to transport glue so they cannot drift apart.
 
 ### Request protection
 
-All users can access the app without registration or a password. The `POST /api/generate` entry points share the guards in `server/request-guard.js`:
+All users can access the app without registration or a password. The shared `/api/generate` handler applies the guards in `server/request-guard.js`:
 
-- Process-local rate limit: 5 requests per 10 minutes per detected client address.
-- Request body limit: 256 KiB.
-- `idea`: at most 2,000 characters.
-- `history`: at most 8 items, with 800 characters per item.
-- `currentPlan`: at most 128 KiB, 16 days, and 200 itinerary cards.
-- Public API errors omit upstream `detail`; unexpected errors are reduced to a generic message.
+- Process-local rate limit: 5 successful generations per 10 minutes per client address. Quota is consumed only after a generation succeeds; failed requests do not count.
+- Request body limit: 1 MiB, enforced while reading the raw stream (the frontend Nginx `client_max_body_size` matches).
+- Oversized but well-formed input is truncated instead of rejected: `idea` to 2,000 characters, `history` to the last 8 items with 800 characters each, `currentPlan` itinerary to 16 days and 200 cards. Only structural errors return 400.
+- The rate-limit key comes from the socket address unless `TRUST_PROXY=1` (or `true`), which enables the proxy-forwarded `X-Real-IP` / `X-Forwarded-For` headers. The Docker frontend Nginx uses the realip module and only honors those headers from private-network proxies, so spoofed client headers never reach the API.
+- Intentionally user-facing errors are created via `createPublicError` (which sets `expose`); everything else is reduced to a generic message, and upstream `detail` is logged server-side only.
 
 The limiter is intentionally dependency-free and process-local. In a multi-instance Vercel deployment, each instance has its own counter; use shared storage if a globally consistent quota is required.
 

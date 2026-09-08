@@ -7,6 +7,10 @@ const { generateTravelPlan } = vi.hoisted(() => ({
 }));
 
 vi.mock('../../server/deepseek.js', () => ({ generateTravelPlan }));
+vi.mock('../../server/request-guard.js', async (importOriginal) => {
+  const actual = await importOriginal();
+  return { ...actual, recordGenerateHit: vi.fn() };
+});
 
 import handler from '../../api/generate.js';
 
@@ -15,16 +19,11 @@ function createResponse() {
     statusCode: 200,
     body: null,
     headers: {},
-    status(code) {
-      this.statusCode = code;
-      return this;
-    },
     setHeader(name, value) {
       this.headers[name] = value;
     },
-    json(value) {
-      this.body = value;
-      return this;
+    end(payload) {
+      this.body = payload == null ? null : JSON.parse(payload);
     },
   };
 }
@@ -34,6 +33,7 @@ function createRequest(body, ip = '203.0.113.10') {
     method: 'POST',
     body,
     headers: { 'x-real-ip': ip },
+    socket: { remoteAddress: ip },
   };
 }
 
@@ -51,14 +51,16 @@ describe('api/generate handler', () => {
     expect(response.body).toEqual({ error: 'Method Not Allowed' });
   });
 
-  it('validates input before calling the generation service', async () => {
+  it('truncates oversized input before calling the generation service', async () => {
+    generateTravelPlan.mockResolvedValue({ itinerary: {} });
     const response = createResponse();
 
     await handler(createRequest({ idea: 'a'.repeat(2001) }, '203.0.113.11'), response);
 
-    expect(response.statusCode).toBe(413);
-    expect(response.body).toEqual({ error: '旅行想法不能超过 2000 个字符。' });
-    expect(generateTravelPlan).not.toHaveBeenCalled();
+    expect(response.statusCode).toBe(200);
+    const [, contextArg] = generateTravelPlan.mock.calls[0];
+    expect(generateTravelPlan.mock.calls[0][0]).toHaveLength(2000);
+    expect(contextArg).toEqual({ currentPlan: null, history: [] });
   });
 
   it('returns the generated plan for a valid request', async () => {
@@ -69,7 +71,7 @@ describe('api/generate handler', () => {
     await handler(createRequest({ idea: '去杭州两日游', history: [] }, '203.0.113.12'), response);
 
     expect(response.statusCode).toBe(200);
-    expect(response.body).toBe(plan);
+    expect(response.body).toEqual(plan);
     expect(generateTravelPlan).toHaveBeenCalledWith('去杭州两日游', { currentPlan: null, history: [] });
   });
 

@@ -1,8 +1,7 @@
-export const maxRequestBodyBytes = 256 * 1024;
+export const maxRequestBodyBytes = 1024 * 1024;
 export const maxIdeaCharacters = 2000;
 export const maxHistoryItems = 8;
 export const maxHistoryContentCharacters = 800;
-export const maxCurrentPlanBytes = 128 * 1024;
 export const maxItineraryDays = 16;
 export const maxItineraryItems = 200;
 
@@ -12,56 +11,45 @@ const rateLimitBuckets = new Map();
 
 export function validateGenerateRequest(body) {
   if (!body || typeof body !== 'object' || Array.isArray(body)) {
-    throw createRequestError('请求格式不正确。', 400);
-  }
-
-  const serializedBody = JSON.stringify(body);
-  if (getUtf8ByteLength(serializedBody) > maxRequestBodyBytes) {
-    throw createRequestError('请求内容过大，请精简旅行想法或行程上下文。', 413);
+    throw createPublicError('请求格式不正确。', 400);
   }
 
   if (typeof body.idea !== 'string') {
-    throw createRequestError('旅行想法格式不正确。', 400);
+    throw createPublicError('旅行想法格式不正确。', 400);
   }
-
-  const idea = body.idea.trim();
+  const idea = body.idea.trim().slice(0, maxIdeaCharacters);
   if (!idea) {
-    throw createRequestError('请输入旅行想法。', 400);
-  }
-  if (idea.length > maxIdeaCharacters) {
-    throw createRequestError(`旅行想法不能超过 ${maxIdeaCharacters} 个字符。`, 413);
+    throw createPublicError('请输入旅行想法。', 400);
   }
 
-  const currentPlan = body.currentPlan == null ? null : body.currentPlan;
+  let currentPlan = body.currentPlan == null ? null : body.currentPlan;
   if (currentPlan !== null) {
     if (typeof currentPlan !== 'object' || Array.isArray(currentPlan)) {
-      throw createRequestError('当前行程格式不正确。', 400);
+      throw createPublicError('当前行程格式不正确。', 400);
     }
-    if (getUtf8ByteLength(JSON.stringify(currentPlan)) > maxCurrentPlanBytes) {
-      throw createRequestError('当前行程内容过大，请先精简行程后再优化。', 413);
-    }
-    validateCurrentPlanSize(currentPlan);
+    currentPlan = clampCurrentPlan(currentPlan);
   }
 
-  const history = body.history == null ? [] : body.history;
-  if (!Array.isArray(history)) {
-    throw createRequestError('沟通记录格式不正确。', 400);
+  const rawHistory = body.history == null ? [] : body.history;
+  if (!Array.isArray(rawHistory)) {
+    throw createPublicError('沟通记录格式不正确。', 400);
   }
-  if (history.length > maxHistoryItems) {
-    throw createRequestError(`沟通记录不能超过 ${maxHistoryItems} 条。`, 413);
-  }
-  history.forEach((item) => {
+  const history = rawHistory.slice(-maxHistoryItems).map((item) => {
     if (!item || typeof item !== 'object' || Array.isArray(item) || typeof item.content !== 'string') {
-      throw createRequestError('沟通记录格式不正确。', 400);
+      throw createPublicError('沟通记录格式不正确。', 400);
     }
-    if (item.content.length > maxHistoryContentCharacters) {
-      throw createRequestError(`每条沟通记录不能超过 ${maxHistoryContentCharacters} 个字符。`, 413);
-    }
+    return {
+      role: typeof item.role === 'string' && item.role ? item.role.slice(0, 32) : 'user',
+      content: item.content.slice(0, maxHistoryContentCharacters),
+    };
   });
 
   return { idea, currentPlan, history };
 }
 
+// 限流拆分为两步：checkGenerateRateLimit 只查询配额，recordGenerateHit 在生成成功后
+// 才记录一次。失败请求（校验不过、上游 5xx、配置缺失）不再消耗配额，避免把已经
+// 出错的用户锁在窗口外。
 export function checkGenerateRateLimit(request) {
   const now = Date.now();
   const key = getClientKey(request);
@@ -69,21 +57,38 @@ export function checkGenerateRateLimit(request) {
   const recent = existing.filter((timestamp) => now - timestamp < rateLimitWindowMs);
 
   if (recent.length >= rateLimitMaxRequests) {
-    rateLimitBuckets.set(key, recent);
     return {
       allowed: false,
       retryAfterSeconds: Math.max(1, Math.ceil((rateLimitWindowMs - (now - recent[0])) / 1000)),
     };
   }
 
-  recent.push(now);
-  rateLimitBuckets.set(key, recent);
-  pruneRateLimitBuckets(now);
   return { allowed: true, retryAfterSeconds: 0 };
 }
 
+export function recordGenerateHit(request) {
+  const now = Date.now();
+  const key = getClientKey(request);
+  const existing = rateLimitBuckets.get(key) || [];
+  const recent = existing.filter((timestamp) => now - timestamp < rateLimitWindowMs);
+  recent.push(now);
+  rateLimitBuckets.set(key, recent);
+
+  if (rateLimitBuckets.size >= 1024) {
+    pruneRateLimitBuckets(now);
+  }
+}
+
 export function createRateLimitError(retryAfterSeconds) {
-  return createRequestError('请求过于频繁，请稍后再试。', 429, { retryAfterSeconds });
+  return createPublicError('请求过于频繁，请稍后再试。', 429, { retryAfterSeconds });
+}
+
+export function createPublicError(message, status, extra = {}) {
+  const error = new Error(message);
+  error.status = status;
+  error.expose = true;
+  Object.assign(error, extra);
+  return error;
 }
 
 export function toPublicApiError(error, fallback = '生成行程失败，请稍后重试。') {
@@ -99,55 +104,64 @@ export function toPublicApiError(error, fallback = '生成行程失败，请稍�
 
 export function logApiError(scope, error) {
   const status = Number(error?.status) || 500;
-  console.error(`[${scope}] status=${status} message=${String(error?.message || 'unknown error')}`);
+  const detail = typeof error?.detail === 'string' && error.detail ? ` detail=${error.detail.slice(0, 500).replace(/\s+/g, ' ')}` : '';
+  console.error(`[${scope}] status=${status} message=${String(error?.message || 'unknown error')}${detail}`);
 }
 
-function validateCurrentPlanSize(currentPlan) {
+function clampCurrentPlan(currentPlan) {
   const itinerary = currentPlan.itinerary;
-  if (itinerary == null) return;
+  if (itinerary == null) return currentPlan;
   if (typeof itinerary !== 'object' || Array.isArray(itinerary)) {
-    throw createRequestError('当前行程格式不正确。', 400);
+    throw createPublicError('当前行程格式不正确。', 400);
   }
 
-  const days = Object.entries(itinerary);
-  if (days.length > maxItineraryDays) {
-    throw createRequestError(`行程天数不能超过 ${maxItineraryDays} 天。`, 413);
+  const clampedItinerary = {};
+  let remainingItems = maxItineraryItems;
+  for (const [day, items] of Object.entries(itinerary).slice(0, maxItineraryDays)) {
+    if (!Array.isArray(items)) {
+      clampedItinerary[day] = items;
+      continue;
+    }
+    const clampedItems = items.slice(0, Math.max(0, remainingItems));
+    remainingItems -= clampedItems.length;
+    clampedItinerary[day] = clampedItems;
   }
 
-  const itemCount = days.reduce((count, [, items]) => count + (Array.isArray(items) ? items.length : 0), 0);
-  if (itemCount > maxItineraryItems) {
-    throw createRequestError(`行程卡片不能超过 ${maxItineraryItems} 项。`, 413);
-  }
+  return { ...currentPlan, itinerary: clampedItinerary };
 }
 
 function getClientKey(request) {
+  const socketAddress = request?.socket?.remoteAddress || request?.ip || 'unknown';
+
+  if (!isTrustedProxyEnabled()) {
+    return String(socketAddress).slice(0, 128);
+  }
+
   const forwardedFor = request?.headers?.['x-forwarded-for'];
   const forwardedIp = Array.isArray(forwardedFor) ? forwardedFor[0] : String(forwardedFor || '').split(',')[0].trim();
   const realIp = Array.isArray(request?.headers?.['x-real-ip'])
     ? request.headers['x-real-ip'][0]
     : String(request?.headers?.['x-real-ip'] || '').trim();
-  const ip = realIp || forwardedIp || request?.ip || request?.socket?.remoteAddress || 'unknown';
-  return String(ip).slice(0, 128);
+  return String(realIp || forwardedIp || socketAddress).slice(0, 128);
+}
+
+// 只有在确认前面是不可伪造客户端头的反向代理时才开启（Docker 部署里前端 Nginx
+// 会用 $remote_addr 覆写这些头）。直连暴露时保持关闭，否则限流可被伪造头绕过。
+function isTrustedProxyEnabled() {
+  const value = process.env.TRUST_PROXY;
+  return value === '1' || value === 'true';
 }
 
 function pruneRateLimitBuckets(now) {
-  if (rateLimitBuckets.size < 10000) return;
-
   for (const [key, timestamps] of rateLimitBuckets) {
     const recent = timestamps.filter((timestamp) => now - timestamp < rateLimitWindowMs);
     if (recent.length === 0) rateLimitBuckets.delete(key);
     else rateLimitBuckets.set(key, recent);
   }
-}
 
-function getUtf8ByteLength(value) {
-  return new TextEncoder().encode(value).length;
-}
-
-function createRequestError(message, status, extra = {}) {
-  const error = new Error(message);
-  error.status = status;
-  error.expose = true;
-  Object.assign(error, extra);
-  return error;
+  const maxBuckets = 10000;
+  while (rateLimitBuckets.size > maxBuckets) {
+    const oldestKey = rateLimitBuckets.keys().next().value;
+    rateLimitBuckets.delete(oldestKey);
+  }
 }
