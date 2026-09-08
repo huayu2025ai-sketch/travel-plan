@@ -10,7 +10,9 @@ body {
   margin: 0;
   min-width: 320px;
   background: #f5f1e8;
-  transition: background-color 0.3s ease;
+  transition: background-color 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 .dark body {
@@ -22,6 +24,44 @@ textarea {
   font: inherit;
 }
 
+/* --- Global smooth transitions --- */
+select,
+input[type="text"],
+input[type="number"],
+input[type="date"],
+textarea {
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease;
+}
+
+select:focus,
+input[type="text"]:focus,
+input[type="number"]:focus,
+input[type="date"]:focus,
+textarea:focus {
+  box-shadow: 0 0 0 3px rgba(120, 113, 108, 0.08);
+}
+
+.dark select:focus,
+.dark input[type="text"]:focus,
+.dark input[type="number"]:focus,
+.dark input[type="date"]:focus,
+.dark textarea:focus {
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.06);
+}
+
+/* --- Animated gradient badge for AI tag --- */
+.ai-badge {
+  background: linear-gradient(135deg, #f59e0b 0%, #ef4444 50%, #ec4899 100%);
+  background-size: 200% 200%;
+  animation: badge-shimmer 4s ease-in-out infinite;
+}
+
+@keyframes badge-shimmer {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+}
+
+/* --- Travel loader --- */
 .travel-loader {
   display: inline-flex;
   height: 1.6rem;
@@ -60,43 +100,154 @@ textarea {
   }
 }
 
+/* --- Map grid background with subtle animated glow --- */
 .map-grid {
   background-image:
-    linear-gradient(rgba(87, 72, 53, 0.075) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(87, 72, 53, 0.075) 1px, transparent 1px),
-    radial-gradient(circle at 20% 20%, rgba(14, 116, 144, 0.08), transparent 34%),
-    radial-gradient(circle at 80% 10%, rgba(217, 119, 6, 0.10), transparent 28%),
-    radial-gradient(circle at 50% 80%, rgba(22, 101, 52, 0.08), transparent 30%);
-  background-size: 34px 34px, 34px 34px, 100% 100%, 100% 100%, 100% 100%;
+    linear-gradient(rgba(87, 72, 53, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(87, 72, 53, 0.06) 1px, transparent 1px),
+    radial-gradient(circle at 15% 25%, rgba(14, 116, 144, 0.10), transparent 40%),
+    radial-gradient(circle at 85% 15%, rgba(217, 119, 6, 0.12), transparent 35%),
+    radial-gradient(circle at 50% 85%, rgba(22, 101, 52, 0.09), transparent 35%),
+    radial-gradient(circle at 65% 50%, rgba(168, 85, 247, 0.06), transparent 30%);
+  background-size: 40px 40px, 40px 40px, 100% 100%, 100% 100%, 100% 100%, 100% 100%;
 }
 
 .dark .map-grid {
   background-image:
-    linear-gradient(rgba(200, 180, 150, 0.04) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(200, 180, 150, 0.04) 1px, transparent 1px),
-    radial-gradient(circle at 20% 20%, rgba(56, 189, 248, 0.06), transparent 34%),
-    radial-gradient(circle at 80% 10%, rgba(251, 191, 36, 0.07), transparent 28%),
-    radial-gradient(circle at 50% 80%, rgba(52, 211, 153, 0.06), transparent 30%);
+    linear-gradient(rgba(200, 180, 150, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(200, 180, 150, 0.03) 1px, transparent 1px),
+    radial-gradient(circle at 15% 25%, rgba(56, 189, 248, 0.07), transparent 40%),
+    radial-gradient(circle at 85% 15%, rgba(251, 191, 36, 0.08), transparent 35%),
+    radial-gradient(circle at 50% 85%, rgba(52, 211, 153, 0.07), transparent 35%),
+    radial-gradient(circle at 65% 50%, rgba(168, 85, 247, 0.05), transparent 30%);
 }
 
+/* --- Scrollbar --- */
 ::-webkit-scrollbar {
-  height: 10px;
-  width: 10px;
+  height: 8px;
+  width: 8px;
 }
 
 ::-webkit-scrollbar-thumb {
   background: #c9bfae;
   border-radius: 999px;
+  transition: background 0.2s ease;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #b0a598;
 }
 
 ::-webkit-scrollbar-track {
   background: rgba(255, 255, 255, 0.5);
+  border-radius: 999px;
 }
 
 .dark ::-webkit-scrollbar-thumb {
   background: #4a453e;
 }
 
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #5a554e;
+}
+
 .dark ::-webkit-scrollbar-track {
   background: rgba(30, 28, 26, 0.5);
+  border-radius: 999px;
+}
+
+/* --- Card hover glow effect --- */
+.card-glow {
+  position: relative;
+}
+
+.card-glow::after {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+  z-index: -1;
+}
+
+.card-glow:hover::after {
+  opacity: 1;
+}
+
+.card-glow-accent-sky::after { box-shadow: 0 0 20px rgba(14, 165, 233, 0.15), 0 0 40px rgba(14, 165, 233, 0.05); }
+.card-glow-accent-emerald::after { box-shadow: 0 0 20px rgba(16, 185, 129, 0.15), 0 0 40px rgba(16, 185, 129, 0.05); }
+.card-glow-accent-lime::after { box-shadow: 0 0 20px rgba(132, 204, 22, 0.15), 0 0 40px rgba(132, 204, 22, 0.05); }
+.card-glow-accent-amber::after { box-shadow: 0 0 20px rgba(245, 158, 11, 0.15), 0 0 40px rgba(245, 158, 11, 0.05); }
+.card-glow-accent-violet::after { box-shadow: 0 0 20px rgba(139, 92, 246, 0.15), 0 0 40px rgba(139, 92, 246, 0.05); }
+.card-glow-accent-rose::after { box-shadow: 0 0 20px rgba(244, 63, 94, 0.15), 0 0 40px rgba(244, 63, 94, 0.05); }
+
+.dark .card-glow-accent-sky::after { box-shadow: 0 0 24px rgba(14, 165, 233, 0.10), 0 0 48px rgba(14, 165, 233, 0.04); }
+.dark .card-glow-accent-emerald::after { box-shadow: 0 0 24px rgba(16, 185, 129, 0.10), 0 0 48px rgba(16, 185, 129, 0.04); }
+.dark .card-glow-accent-lime::after { box-shadow: 0 0 24px rgba(132, 204, 22, 0.10), 0 0 48px rgba(132, 204, 22, 0.04); }
+.dark .card-glow-accent-amber::after { box-shadow: 0 0 24px rgba(245, 158, 11, 0.10), 0 0 48px rgba(245, 158, 11, 0.04); }
+.dark .card-glow-accent-violet::after { box-shadow: 0 0 24px rgba(139, 92, 246, 0.10), 0 0 48px rgba(139, 92, 246, 0.04); }
+.dark .card-glow-accent-rose::after { box-shadow: 0 0 24px rgba(244, 63, 94, 0.10), 0 0 48px rgba(244, 63, 94, 0.04); }
+
+/* --- Stat card gradient icon ring --- */
+.stat-icon-ring {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 0.75rem;
+  flex-shrink: 0;
+}
+
+/* --- Fade-in animation for sections --- */
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-up {
+  animation: fade-up 0.5s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+.animate-fade-up-delay-1 { animation-delay: 0.1s; }
+.animate-fade-up-delay-2 { animation-delay: 0.2s; }
+.animate-fade-up-delay-3 { animation-delay: 0.3s; }
+
+/* --- Dropdown menu animation --- */
+.dropdown-enter {
+  animation: dropdown-in 0.18s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes dropdown-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* --- Day column empty state pulse --- */
+@keyframes empty-pulse {
+  0%, 100% { border-color: rgba(168, 162, 158, 0.25); }
+  50% { border-color: rgba(168, 162, 158, 0.45); }
+}
+
+.dark @keyframes empty-pulse {
+  0%, 100% { border-color: rgba(74, 69, 62, 0.3); }
+  50% { border-color: rgba(74, 69, 62, 0.55); }
+}
+
+.empty-droppable {
+  animation: empty-pulse 2.5s ease-in-out infinite;
 }

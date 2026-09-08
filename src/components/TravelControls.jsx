@@ -7,7 +7,7 @@ export function ThemeToggle({ theme, setTheme }) {
     <button
       type="button"
       onClick={() => setTheme(isDark ? 'light' : 'dark')}
-      className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-stone-200 bg-white text-stone-500 shadow-sm transition hover:border-stone-300 hover:text-stone-700 dark:border-[#3a3630] dark:bg-[#1e1c1a] dark:text-[#7a746c] dark:hover:border-[#5a554e] dark:hover:text-[#b5afa6]"
+      className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-stone-200/80 bg-white/90 text-stone-500 shadow-sm backdrop-blur-sm transition-all duration-200 hover:border-stone-300 hover:text-amber-600 hover:shadow-md dark:border-[#3a3630]/80 dark:bg-[#1e1c1a]/90 dark:text-[#7a746c] dark:hover:border-amber-800/40 dark:hover:text-amber-400 dark:hover:shadow-md dark:shadow-none"
       aria-label="切换主题"
       title="切换主题"
     >

@@ -709,8 +709,7 @@ async function buildPlanImageBlob(plan) {
 
       ctx.fillStyle = '#57534e';
       ctx.font = '700 20px "PingFang SC", "Microsoft YaHei", sans-serif';
-      ctx.fillText(`费用 ${item.cost}`, 242, y + 84);
-      ctx.fillText(`耗时 ${item.duration}`, 430, y + 84);
+      ctx.fillText(`耗时 ${item.duration}`, 242, y + 84);
 
       ctx.fillStyle = '#78716c';
       ctx.font = '500 20px "PingFang SC", "Microsoft YaHei", sans-serif';
@@ -1395,27 +1394,28 @@ function App() {
   };
 
   return (
-    <main className="min-h-screen bg-[#f5f1e8] text-stone-900 transition-colors duration-300 dark:bg-[#141210] dark:text-[#e8e4df]">
-      <div className="map-grid fixed inset-0 opacity-55" aria-hidden="true" />
+    <main className="min-h-screen bg-[#f5f1e8] text-stone-900 transition-colors duration-400 dark:bg-[#141210] dark:text-[#e8e4df]">
+      <div className="map-grid fixed inset-0 opacity-50" aria-hidden="true" />
       <div className="relative mx-auto flex min-h-screen max-w-[1680px] flex-col px-4 py-5 sm:px-6 lg:px-8">
-        <header className="grid gap-5 rounded-lg border border-stone-200 bg-white/82 p-4 shadow-soft backdrop-blur transition dark:border-[#3a3630] dark:bg-[#1e1c1a]/82 dark:shadow-soft-dark md:grid-cols-[1.25fr_0.75fr] md:p-5">
+        <header className="animate-fade-up grid gap-5 rounded-2xl border border-stone-200/80 bg-white/85 p-5 shadow-soft backdrop-blur-lg transition-all duration-300 dark:border-[#3a3630]/80 dark:bg-[#1e1c1a]/85 dark:shadow-soft-dark md:grid-cols-[1.25fr_0.75fr] md:p-6">
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <span className="inline-flex items-center gap-2 rounded-full border border-stone-200 bg-stone-50 px-3 py-1 text-xs font-semibold text-stone-600 dark:border-[#3a3630] dark:bg-[#252320] dark:text-[#9a9389]">
-                <Sparkles className="h-3.5 w-3.5 text-amber-600" />
+              <span className="ai-badge inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-white shadow-sm">
+                <Sparkles className="h-3 w-3" />
                 AI 旅行草案
               </span>
-              <span className="text-xs font-medium text-stone-500 dark:text-[#7a746c]">编辑看板 Step 5 版本</span>
             </div>
-            <h1 className="mt-4 font-display text-4xl font-black leading-tight text-stone-950 dark:text-[#e8e4df] md:text-5xl">
-              把粗略想法整理成可调整的每日行程
+            <h1 className="mt-5 font-display text-4xl font-black leading-[1.15] tracking-tight text-stone-950 dark:text-[#e8e4df] md:text-5xl">
+              把粗略想法整理成
+              <br className="hidden sm:block" />
+              可调整的每日行程
             </h1>
             <p className="mt-3 max-w-3xl text-sm leading-6 text-stone-600 dark:text-[#9a9389] md:text-base">
               输入旅行想法后生成结构化 JSON，也可以继续输入优化要求，AI 会带入当前草案上下文。
             </p>
           </div>
 
-          <form onSubmit={generatePlan} className="rounded-lg border border-stone-200 bg-[#fbfaf7] p-3 transition dark:border-[#3a3630] dark:bg-[#252320]">
+          <form onSubmit={generatePlan} className="rounded-xl border border-stone-200/80 bg-[#fbfaf7]/90 p-3.5 backdrop-blur transition-all duration-300 dark:border-[#3a3630]/80 dark:bg-[#252320]/90">
             <div className="flex items-center justify-between">
               <label htmlFor="trip-idea" className="text-sm font-semibold text-stone-800 dark:text-[#c4bdb4]">
                 {hasAiContext ? '继续优化' : '旅行想法'}
@@ -1424,7 +1424,7 @@ function App() {
             </div>
             <textarea
               id="trip-idea"
-              className="mt-2 h-28 w-full resize-none rounded-md border border-stone-200 bg-white px-3 py-2 text-sm leading-6 text-stone-700 outline-none ring-0 transition placeholder:text-stone-400 focus:border-stone-400 dark:border-[#3a3630] dark:bg-[#2a2724] dark:text-[#b5afa6] dark:placeholder:text-[#5e584f] dark:focus:border-[#5a554e]"
+              className="mt-2 h-28 w-full resize-none rounded-lg border border-stone-200/80 bg-white px-3 py-2.5 text-sm leading-6 text-stone-700 outline-none ring-0 transition-all duration-200 placeholder:text-stone-400 focus:border-stone-400 dark:border-[#3a3630]/80 dark:bg-[#2a2724] dark:text-[#b5afa6] dark:placeholder:text-[#5e584f] dark:focus:border-[#5a554e]"
               value={idea}
               onChange={(event) => setIdea(event.target.value)}
               disabled={isGenerating}
@@ -1487,7 +1487,7 @@ function App() {
               type="button"
               onClick={clearPlan}
               disabled={isGenerating}
-              className="mt-2 inline-flex w-full items-center justify-center rounded-md border border-stone-200 bg-white px-3 py-2 text-xs font-semibold text-stone-500 transition hover:border-red-200 hover:bg-red-50 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-60 dark:border-[#3a3630] dark:bg-[#1e1c1a] dark:text-[#9a9389] dark:hover:border-red-900/50 dark:hover:bg-red-950/30 dark:hover:text-red-400"
+              className="mt-2 inline-flex w-full items-center justify-center rounded-lg border border-stone-200/80 bg-white/80 px-3 py-2 text-xs font-semibold text-stone-400 transition-all duration-200 hover:border-red-200 hover:bg-red-50/80 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-60 dark:border-[#3a3630]/80 dark:bg-[#1e1c1a]/80 dark:text-[#7a746c] dark:hover:border-red-900/50 dark:hover:bg-red-950/30 dark:hover:text-red-400"
             >
               清空行程
             </button>
@@ -1501,20 +1501,24 @@ function App() {
               <Coins className="h-6 w-6 text-amber-600" />
               <p className="text-2xl font-bold text-stone-950 dark:text-[#e8e4df]">{computedBudgetEstimate}</p>
             </div>
-            <p className="mt-2 text-xs font-medium text-stone-500 dark:text-[#7a746c]">按卡片金额自动汇总，千元区间显示</p>
+            <p className="mt-2 text-[11px] font-medium text-stone-400 dark:text-[#6a645c]">按卡片金额自动汇总</p>
           </div>
-          <div className="rounded-lg border border-stone-200 bg-white/85 p-4 shadow-soft backdrop-blur transition dark:border-[#3a3630] dark:bg-[#1e1c1a]/85 dark:shadow-soft-dark">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-stone-400 dark:text-[#5e584f]">推荐交通</p>
-            <div className="mt-2 flex items-center gap-3">
-              <TrainFront className="h-6 w-6 text-sky-600" />
-              <p className="text-2xl font-bold text-stone-950 dark:text-[#e8e4df]">{plan.recommended_transport}</p>
+          <div className="group rounded-xl border border-stone-200/80 bg-white/85 p-4 shadow-soft backdrop-blur transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg dark:border-[#3a3630]/80 dark:bg-[#1e1c1a]/85 dark:shadow-soft-dark">
+            <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-stone-400 dark:text-[#5e584f]">推荐交通</p>
+            <div className="mt-2.5 flex items-center gap-3">
+              <div className="stat-icon-ring bg-sky-50 text-sky-600 dark:bg-sky-950/30 dark:text-sky-400">
+                <TrainFront className="h-5 w-5" />
+              </div>
+              <p className="text-xl font-black tracking-tight text-stone-950 dark:text-[#e8e4df]">{plan.recommended_transport}</p>
             </div>
           </div>
-          <div className="rounded-lg border border-stone-200 bg-white/85 p-4 shadow-soft backdrop-blur transition dark:border-[#3a3630] dark:bg-[#1e1c1a]/85 dark:shadow-soft-dark">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-stone-400 dark:text-[#5e584f]">规划范围</p>
-            <div className="mt-2 flex items-center gap-3">
-              <Route className="h-6 w-6 text-emerald-600" />
-              <p className="text-2xl font-bold text-stone-950 dark:text-[#e8e4df]">
+          <div className="group rounded-xl border border-stone-200/80 bg-white/85 p-4 shadow-soft backdrop-blur transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg dark:border-[#3a3630]/80 dark:bg-[#1e1c1a]/85 dark:shadow-soft-dark">
+            <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-stone-400 dark:text-[#5e584f]">规划范围</p>
+            <div className="mt-2.5 flex items-center gap-3">
+              <div className="stat-icon-ring bg-emerald-50 text-emerald-600 dark:bg-emerald-950/30 dark:text-emerald-400">
+                <Route className="h-5 w-5" />
+              </div>
+              <p className="text-xl font-black tracking-tight text-stone-950 dark:text-[#e8e4df]">
                 {plannedDayCount}天 · {itineraryItemCount}项
               </p>
             </div>
@@ -1536,7 +1540,7 @@ function App() {
           </button>
         </section>
 
-        <section className="mt-5 flex-1 overflow-hidden rounded-lg border border-stone-200 bg-white/70 p-3 shadow-soft backdrop-blur transition dark:border-[#3a3630] dark:bg-[#1e1c1a]/70 dark:shadow-soft-dark">
+        <section className="animate-fade-up animate-fade-up-delay-2 mt-5 flex-1 overflow-hidden rounded-2xl border border-stone-200/80 bg-white/70 p-3 shadow-soft backdrop-blur transition-all duration-300 dark:border-[#3a3630]/80 dark:bg-[#1e1c1a]/70 dark:shadow-soft-dark">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-3 px-1">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-stone-400 dark:text-[#5e584f]">Kanban Board</p>
@@ -1558,12 +1562,12 @@ function App() {
               <button
                 type="button"
                 onClick={addDay}
-                className="inline-flex items-center gap-2 rounded-full border border-stone-200 bg-white px-3 py-2 text-xs font-semibold text-stone-600 transition hover:border-stone-300 hover:bg-stone-50 dark:border-[#3a3630] dark:bg-[#1e1c1a] dark:text-[#9a9389] dark:hover:border-[#5a554e] dark:hover:bg-[#2e2b26]"
+                className="inline-flex items-center gap-2 rounded-full border border-stone-200/80 bg-white/90 px-3 py-2 text-xs font-semibold text-stone-600 shadow-sm backdrop-blur transition-all duration-200 hover:border-stone-300 hover:bg-stone-50 hover:shadow-md dark:border-[#3a3630]/80 dark:bg-[#1e1c1a]/90 dark:text-[#9a9389] dark:hover:border-[#5a554e] dark:hover:bg-[#2e2b26]"
               >
                 <Plus className="h-4 w-4 text-stone-500 dark:text-[#7a746c]" />
                 添加天数
               </button>
-              <label className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-stone-200 bg-white px-3 py-2 text-xs font-semibold text-stone-600 transition hover:border-stone-300 hover:bg-stone-50 dark:border-[#3a3630] dark:bg-[#1e1c1a] dark:text-[#9a9389] dark:hover:border-[#5a554e] dark:hover:bg-[#2e2b26]">
+              <label className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-stone-200/80 bg-white/90 px-3 py-2 text-xs font-semibold text-stone-600 shadow-sm backdrop-blur transition-all duration-200 hover:border-stone-300 hover:bg-stone-50 hover:shadow-md dark:border-[#3a3630]/80 dark:bg-[#1e1c1a]/90 dark:text-[#9a9389] dark:hover:border-[#5a554e] dark:hover:bg-[#2e2b26]">
                 <FileUp className="h-4 w-4 text-stone-500 dark:text-[#7a746c]" />
                 导入JSON
                 <input key={importInputKey} type="file" accept="application/json,.json" onChange={importPlan} className="hidden" />
@@ -1573,14 +1577,14 @@ function App() {
                   type="button"
                   onClick={() => setIsExportMenuOpen((isOpen) => !isOpen)}
                   aria-expanded={isExportMenuOpen}
-                  className="inline-flex items-center gap-2 rounded-full border border-stone-200 bg-white px-3 py-2 text-xs font-semibold text-stone-600 transition hover:border-stone-300 hover:bg-stone-50 dark:border-[#3a3630] dark:bg-[#1e1c1a] dark:text-[#9a9389] dark:hover:border-[#5a554e] dark:hover:bg-[#2e2b26]"
+                  className="inline-flex items-center gap-2 rounded-full border border-stone-200/80 bg-white/90 px-3 py-2 text-xs font-semibold text-stone-600 shadow-sm backdrop-blur transition-all duration-200 hover:border-stone-300 hover:bg-stone-50 hover:shadow-md dark:border-[#3a3630]/80 dark:bg-[#1e1c1a]/90 dark:text-[#9a9389] dark:hover:border-[#5a554e] dark:hover:bg-[#2e2b26]"
                 >
                   <Download className="h-4 w-4 text-stone-500 dark:text-[#7a746c]" />
                   导出
                   <ChevronDown className="h-3.5 w-3.5 text-stone-400 dark:text-[#7a746c]" />
                 </button>
                 {isExportMenuOpen ? (
-                  <div className="absolute right-0 z-20 mt-2 w-36 overflow-hidden rounded-lg border border-stone-200 bg-white p-1 shadow-card dark:border-[#3a3630] dark:bg-[#1e1c1a] dark:shadow-card-dark">
+                  <div className="dropdown-enter absolute right-0 z-20 mt-2 w-36 overflow-hidden rounded-xl border border-stone-200/80 bg-white/95 p-1 shadow-lg backdrop-blur-lg dark:border-[#3a3630]/80 dark:bg-[#1e1c1a]/95 dark:shadow-card-dark">
                     <button
                       type="button"
                       onClick={() => runExportAction(exportPlan)}
@@ -1620,10 +1624,10 @@ function App() {
             <button
               type="button"
               onClick={showAllTypes}
-              className={`inline-flex items-center rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+              className={`inline-flex items-center rounded-full border px-3 py-1.5 text-xs font-bold transition-all duration-200 ${
                 !isFilteredView
-                  ? 'border-stone-950 bg-stone-950 text-white dark:border-[#e8e4df] dark:bg-[#e8e4df] dark:text-[#141210]'
-                  : 'border-stone-200 bg-white text-stone-600 hover:bg-stone-50 dark:border-[#3a3630] dark:bg-[#1e1c1a] dark:text-[#9a9389] dark:hover:bg-[#2e2b26]'
+                  ? 'border-stone-950 bg-stone-950 text-white shadow-sm dark:border-[#e8e4df] dark:bg-[#e8e4df] dark:text-[#141210]'
+                  : 'border-stone-200/80 bg-white/90 text-stone-600 hover:bg-stone-50 dark:border-[#3a3630]/80 dark:bg-[#1e1c1a]/90 dark:text-[#9a9389] dark:hover:bg-[#2e2b26]'
               }`}
             >
               全部 {itineraryItemCount}
@@ -1635,14 +1639,14 @@ function App() {
                   key={type}
                   type="button"
                   onClick={() => toggleTypeFilter(type)}
-                  className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                  className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-bold transition-all duration-200 ${
                     isActive
                       ? getTypeBadgeClass(type)
-                      : 'border-stone-200 bg-white text-stone-400 hover:bg-stone-50 dark:border-[#3a3630] dark:bg-[#1e1c1a] dark:text-[#5e584f] dark:hover:bg-[#2e2b26]'
+                      : 'border-stone-200/80 bg-white/90 text-stone-400 hover:bg-stone-50 dark:border-[#3a3630]/80 dark:bg-[#1e1c1a]/90 dark:text-[#5e584f] dark:hover:bg-[#2e2b26]'
                   }`}
                   aria-pressed={isActive}
                 >
-                  <span className={`h-2 w-2 rounded-full ${typeAccent[type]}`} />
+                  <span className={`h-2 w-2 rounded-full transition-transform duration-200 ${typeAccent[type]} ${isActive ? 'scale-125' : ''}`} />
                   {type} {typeCounts[type] || 0}
                 </button>
               );
@@ -1670,12 +1674,12 @@ function App() {
           {isAddFormOpen ? (
             <form
               onSubmit={addCustomCard}
-              className="mb-4 grid gap-2 rounded-lg border border-stone-200 bg-white/80 p-3 transition dark:border-[#3a3630] dark:bg-[#1e1c1a]/80 md:grid-cols-[120px_120px_minmax(160px,1.1fr)_120px_120px_minmax(180px,1.2fr)_auto]"
+              className="mb-4 grid gap-2 rounded-xl border border-stone-200/80 bg-white/80 p-3 transition-all duration-300 dark:border-[#3a3630]/80 dark:bg-[#1e1c1a]/80 md:grid-cols-[120px_120px_minmax(160px,1.1fr)_120px_120px_minmax(180px,1.2fr)_auto]"
             >
               <select
                 value={cardForm.day}
                 onChange={(event) => updateCardForm('day', event.target.value)}
-                className="h-10 rounded-md border border-stone-200 bg-white px-3 text-sm text-stone-700 outline-none transition focus:border-stone-400 dark:border-[#3a3630] dark:bg-[#2a2724] dark:text-[#b5afa6] dark:focus:border-[#5a554e]"
+                className="h-10 rounded-lg border border-stone-200/80 bg-white px-3 text-sm text-stone-700 outline-none transition-all duration-200 focus:border-stone-400 dark:border-[#3a3630]/80 dark:bg-[#2a2724] dark:text-[#b5afa6] dark:focus:border-[#5a554e]"
                 aria-label="选择日期"
               >
                 {dayNames.map((day) => (
@@ -1687,7 +1691,7 @@ function App() {
               <select
                 value={cardForm.type}
                 onChange={(event) => updateCardForm('type', event.target.value)}
-                className="h-10 rounded-md border border-stone-200 bg-white px-3 text-sm text-stone-700 outline-none transition focus:border-stone-400 dark:border-[#3a3630] dark:bg-[#2a2724] dark:text-[#b5afa6] dark:focus:border-[#5a554e]"
+                className="h-10 rounded-lg border border-stone-200/80 bg-white px-3 text-sm text-stone-700 outline-none transition-all duration-200 focus:border-stone-400 dark:border-[#3a3630]/80 dark:bg-[#2a2724] dark:text-[#b5afa6] dark:focus:border-[#5a554e]"
                 aria-label="选择类型"
               >
                 {typeOptions.map((type) => (
@@ -1699,7 +1703,7 @@ function App() {
               <input
                 value={cardForm.title}
                 onChange={(event) => updateCardForm('title', event.target.value)}
-                className="h-10 rounded-md border border-stone-200 bg-white px-3 text-sm text-stone-700 outline-none transition placeholder:text-stone-400 focus:border-stone-400 dark:border-[#3a3630] dark:bg-[#2a2724] dark:text-[#b5afa6] dark:placeholder:text-[#5e584f] dark:focus:border-[#5a554e]"
+                className="h-10 rounded-lg border border-stone-200/80 bg-white px-3 text-sm text-stone-700 outline-none transition-all duration-200 placeholder:text-stone-400 focus:border-stone-400 dark:border-[#3a3630]/80 dark:bg-[#2a2724] dark:text-[#b5afa6] dark:placeholder:text-[#5e584f] dark:focus:border-[#5a554e]"
                 placeholder="卡片标题"
               />
               <input
@@ -1709,24 +1713,24 @@ function App() {
                 inputMode="numeric"
                 value={cardForm.cost}
                 onChange={(event) => updateCardForm('cost', event.target.value)}
-                className="h-10 rounded-md border border-stone-200 bg-white px-3 text-sm text-stone-700 outline-none transition placeholder:text-stone-400 focus:border-stone-400 dark:border-[#3a3630] dark:bg-[#2a2724] dark:text-[#b5afa6] dark:placeholder:text-[#5e584f] dark:focus:border-[#5a554e]"
+                className="h-10 rounded-lg border border-stone-200/80 bg-white px-3 text-sm text-stone-700 outline-none transition-all duration-200 placeholder:text-stone-400 focus:border-stone-400 dark:border-[#3a3630]/80 dark:bg-[#2a2724] dark:text-[#b5afa6] dark:placeholder:text-[#5e584f] dark:focus:border-[#5a554e]"
                 placeholder="金额（元）"
               />
               <input
                 value={cardForm.duration}
                 onChange={(event) => updateCardForm('duration', event.target.value)}
-                className="h-10 rounded-md border border-stone-200 bg-white px-3 text-sm text-stone-700 outline-none transition placeholder:text-stone-400 focus:border-stone-400 dark:border-[#3a3630] dark:bg-[#2a2724] dark:text-[#b5afa6] dark:placeholder:text-[#5e584f] dark:focus:border-[#5a554e]"
+                className="h-10 rounded-lg border border-stone-200/80 bg-white px-3 text-sm text-stone-700 outline-none transition-all duration-200 placeholder:text-stone-400 focus:border-stone-400 dark:border-[#3a3630]/80 dark:bg-[#2a2724] dark:text-[#b5afa6] dark:placeholder:text-[#5e584f] dark:focus:border-[#5a554e]"
                 placeholder="耗时"
               />
               <input
                 value={cardForm.advice}
                 onChange={(event) => updateCardForm('advice', event.target.value)}
-                className="h-10 rounded-md border border-stone-200 bg-white px-3 text-sm text-stone-700 outline-none transition placeholder:text-stone-400 focus:border-stone-400 dark:border-[#3a3630] dark:bg-[#2a2724] dark:text-[#b5afa6] dark:placeholder:text-[#5e584f] dark:focus:border-[#5a554e]"
+                className="h-10 rounded-lg border border-stone-200/80 bg-white px-3 text-sm text-stone-700 outline-none transition-all duration-200 placeholder:text-stone-400 focus:border-stone-400 dark:border-[#3a3630]/80 dark:bg-[#2a2724] dark:text-[#b5afa6] dark:placeholder:text-[#5e584f] dark:focus:border-[#5a554e]"
                 placeholder="建议"
               />
               <button
                 type="submit"
-                className="inline-flex h-10 items-center justify-center gap-2 rounded-md bg-stone-950 px-4 text-sm font-semibold text-white transition hover:bg-stone-800 dark:bg-[#e8e4df] dark:text-[#141210] dark:hover:bg-[#d8d4cf]"
+                className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-stone-950 px-4 text-sm font-bold text-white shadow-sm transition-all duration-200 hover:bg-stone-800 hover:shadow-md dark:bg-[#e8e4df] dark:text-[#141210] dark:hover:bg-[#d8d4cf]"
               >
                 <Check className="h-4 w-4" />
                 保存

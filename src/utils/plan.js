@@ -25,6 +25,18 @@ export function getTypeBadgeClass(type) {
   return typeStyles[type] || 'border-stone-200 bg-stone-50 text-stone-700 dark:border-[#3a3630] dark:bg-[#252320] dark:text-[#b5afa6]';
 }
 
+export function getCardGlowClass(type) {
+  const glowMap = {
+    交通: 'card-glow card-glow-accent-sky',
+    景点: 'card-glow card-glow-accent-emerald',
+    citywalk: 'card-glow card-glow-accent-lime',
+    美食: 'card-glow card-glow-accent-amber',
+    酒店: 'card-glow card-glow-accent-violet',
+    娱乐: 'card-glow card-glow-accent-rose',
+  };
+  return glowMap[type] || 'card-glow';
+}
+
 export function createEmptyCardForm(day) {
   return {
     day,
