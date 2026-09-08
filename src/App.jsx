@@ -662,7 +662,7 @@ function App() {
       try {
         data = JSON.parse(responseText);
       } catch {
-        throw new Error('接口返回的不是 JSON，请检查 Vercel API 路由或环境变量配置。');
+        throw new Error('接口返回的不是 JSON，请检查 API 服务或环境变量配置。');
       }
 
       setLastAiResponse(data);

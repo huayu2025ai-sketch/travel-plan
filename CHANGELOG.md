@@ -27,6 +27,7 @@ All notable changes to this project will be documented in this file.
 - Fixed the dev-server rate-limit response tearing down the connection before the client could read the 429 JSON.
 - Fixed the frontend Nginx echoing client-controlled `X-Real-IP` (rate-limit bypass) and dropping security headers on `/assets/`.
 - Fixed multi-byte UTF-8 characters split across read chunks corrupting dev-server request bodies.
+- Fixed the dark-theme empty-column animation using invalid scoped `@keyframes` CSS.
 
 ## [0.1.1.0] - 2026-06-13
 

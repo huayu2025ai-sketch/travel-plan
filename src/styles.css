@@ -239,15 +239,17 @@ textarea:focus {
 
 /* --- Day column empty state pulse --- */
 @keyframes empty-pulse {
-  0%, 100% { border-color: rgba(168, 162, 158, 0.25); }
-  50% { border-color: rgba(168, 162, 158, 0.45); }
-}
-
-.dark @keyframes empty-pulse {
-  0%, 100% { border-color: rgba(74, 69, 62, 0.3); }
-  50% { border-color: rgba(74, 69, 62, 0.55); }
+  0%, 100% { border-color: var(--empty-border-start); }
+  50% { border-color: var(--empty-border-end); }
 }
 
 .empty-droppable {
+  --empty-border-start: rgba(168, 162, 158, 0.25);
+  --empty-border-end: rgba(168, 162, 158, 0.45);
   animation: empty-pulse 2.5s ease-in-out infinite;
+}
+
+.dark .empty-droppable {
+  --empty-border-start: rgba(74, 69, 62, 0.3);
+  --empty-border-end: rgba(74, 69, 62, 0.55);
 }

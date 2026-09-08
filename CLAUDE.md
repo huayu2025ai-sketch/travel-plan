@@ -45,11 +45,12 @@ Copy `.env.example` to `.env` and fill in:
 - `DEEPSEEK_API_KEY` — required for AI plan generation.
 - `DEEPSEEK_BASE_URL` — defaults to `https://api.deepseek.com`.
 - `API_PORT` — port for the standalone Express server; defaults to `8787`.
+- `TRUST_PROXY` — set to `1` or `true` only when a trusted reverse proxy overwrites client IP headers; Docker Compose sets this to `1`.
 - `QWEATHER_API_KEY` — optional API key for QWeather (和风天气). When absent or unavailable, the app falls back to Open-Meteo.
 - `QWEATHER_BASE_URL` — defaults to `https://devapi.qweather.com/v7`.
 - `QWEATHER_GEO_URL` — defaults to `https://geoapi.qweather.com/v2`.
 
-When `QWEATHER_API_KEY` is configured, QWeather is preferred for geocoding and forecast data. If the key is missing or a QWeather request fails, the app falls back to Open-Meteo.
+When `QWEATHER_API_KEY` is configured, QWeather is preferred for geocoding and forecast data. QWeather's `/weather/7d` response is matched by calendar date; if it cannot cover the complete itinerary, the app reuses the resolved coordinates and falls back to Open-Meteo. If the key is missing or a QWeather request fails, the app geocodes with Open-Meteo and uses its daily forecast for the trip range.
 
 Vite loads `.env` automatically in dev mode. The standalone server relies on `dotenv`.
 
@@ -84,10 +85,10 @@ This is a React + Vite frontend with a small Node.js API layer. `src/main.jsx` o
 
 ### API generation flow (`server/deepseek.js`)
 
-`generateTravelPlan(idea, context)` is the only public generation function. It performs three steps:
+`generateTravelPlan(idea, context)` is the generation service called by the shared request handler. It performs three steps:
 
 1. **Extract trip context** — calls DeepSeek with a constrained JSON prompt to get `destination`, `start_date`, and `days`.
-2. **Fetch real weather** — when configured, geocodes the destination with QWeather and fetches its 7-day forecast; otherwise, or when QWeather fails, geocodes with Open-Meteo and fetches its daily forecast for the trip range.
+2. **Fetch real weather** — when configured, geocodes the destination with QWeather and fetches its 7-day forecast by date; if that forecast cannot cover the complete itinerary, it falls back to Open-Meteo using the already resolved coordinates. Otherwise it geocodes with Open-Meteo and fetches its daily forecast for the trip range.
 3. **Generate the plan** — calls DeepSeek again with the extracted context, recent conversation history, current plan (if refining), and the real weather summary; parses the JSON response and normalizes it.
 
 `normalizePlan(parsed, weatherByDay, tripContext)` validates the AI output, fixes malformed card IDs, coerces unknown card types to `景点`, deduplicates IDs, and aligns `weather` keys with `itinerary` days.
@@ -96,7 +97,7 @@ DeepSeek calls retry once on 5xx and have a 60-second timeout per attempt. QWeat
 
 ### API surfaces
 
-The same `generateTravelPlan` function is invoked from three places so the app works in dev, standalone, and serverless deployments:
+The shared `handleGenerateRequest` transport flow is exposed through three deployment surfaces so the app works in dev, standalone, and serverless deployments:
 
 - `vite.config.js` — `travelApiPlugin()` registers `/api/health` and `/api/generate` directly on the Vite dev server.
 - `server/index.js` — Express app exposing the same two routes; used for standalone production hosting.
@@ -109,8 +110,8 @@ The full `/api/generate` pipeline (body reading, rate limiting, validation, gene
 All users can access the app without registration or a password. The shared `/api/generate` handler applies the guards in `server/request-guard.js`:
 
 - Process-local rate limit: 5 successful generations per 10 minutes per client address. Quota is consumed only after a generation succeeds; failed requests do not count.
-- Request body limit: 1 MiB, enforced while reading the raw stream (the frontend Nginx `client_max_body_size` matches).
-- Oversized but well-formed input is truncated instead of rejected: `idea` to 2,000 characters, `history` to the last 8 items with 800 characters each, `currentPlan` itinerary to 16 days and 200 cards. Only structural errors return 400.
+- Request body limit: 1 MiB, enforced while reading the raw stream (the frontend Nginx `client_max_body_size` matches); larger bodies return 413.
+- Oversized but well-formed fields are truncated instead of rejected: `idea` to 2,000 characters, `history` to the last 8 items with 800 characters each, `currentPlan` itinerary to 16 days and 200 cards. Structural errors return 400.
 - The rate-limit key comes from the socket address unless `TRUST_PROXY=1` (or `true`), which enables the proxy-forwarded `X-Real-IP` / `X-Forwarded-For` headers. The Docker frontend Nginx uses the realip module and only honors those headers from private-network proxies, so spoofed client headers never reach the API.
 - Intentionally user-facing errors are created via `createPublicError` (which sets `expose`); everything else is reduced to a generic message, and upstream `detail` is logged server-side only.
 

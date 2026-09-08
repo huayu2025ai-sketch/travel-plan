@@ -8,12 +8,12 @@
 
 ## 功能特性
 
-- **AI 行程生成** — 输入旅行想法，先抽取目的地与日期，再优先调用和风天气、失败时回退到 Open-Meteo 查询真实天气，并结合 DeepSeek 生成带预算、交通、每日安排的行程；支持上下文式优化
+- **AI 行程生成** — 输入旅行想法，先抽取目的地与日期，再按日期匹配和风天气 7 天预报；当预报无法覆盖完整行程或服务不可用时回退到 Open-Meteo，并结合 DeepSeek 生成带预算、交通、每日安排的行程；支持上下文式优化
 - **拖拽看板** — 支持天数排序、卡片跨天拖拽、同天内重新排序
 - **灵活编辑** — 添加/编辑/删除卡片和天数，实时保存到浏览器本地存储
 - **行李清单** — 添加、勾选、删除、拖拽排序、搜索和筛选行李；点击摘要卡片可平滑滚动到清单
-- **数据导入导出** — JSON 格式备份与恢复
-- **双模式运行** — 开发时用 Vite 内置 API，生产时可独立启动 Express 后端或部署到 Vercel
+- **数据导入导出** — 支持 JSON、Markdown、PNG 图片导出，以及 JSON 备份恢复
+- **多模式运行** — 开发时用 Vite 内置 API，生产时可使用 Docker + Nginx、独立 Express 后端或 Vercel
 - **开放访问与请求保护** — 无需注册或密码；生成接口按来源地址限流，并限制请求体和上下文大小
 
 ---
@@ -38,6 +38,8 @@ cp .env.example .env
 DEEPSEEK_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 DEEPSEEK_BASE_URL=https://api.deepseek.com
 API_PORT=8787
+# 仅在可信反向代理覆写客户端 IP 时开启；Docker Compose 已配置为 1
+TRUST_PROXY=0
 QWEATHER_API_KEY=your_qweather_api_key
 QWEATHER_BASE_URL=https://devapi.qweather.com/v7
 QWEATHER_GEO_URL=https://geoapi.qweather.com/v2
@@ -88,7 +90,9 @@ travel-plan/
 │   ├── generate.js       # Vercel Serverless API：生成行程
 │   └── health.js         # Vercel Serverless API：健康检查
 ├── server/
-│   ├── index.js          # Express 独立后端（复用 server/deepseek.js 的生成逻辑）
+│   ├── index.js          # Express 独立后端入口
+│   ├── generate-handler.js # 三种 API 部署面的共享请求处理流程
+│   ├── request-guard.js  # 请求体限制、字段截断、限流和错误收敛
 │   ├── Dockerfile         # Node API 生产镜像
 │   └── deepseek.js       # DeepSeek、天气查询与行程标准化逻辑
 ├── Dockerfile             # 前端静态文件与 Nginx API 反向代理镜像
@@ -112,9 +116,9 @@ npm test
 
 ## 请求限制
 
-应用无需账号、密码或注册即可使用。为了保护 AI 服务额度，`/api/generate` 对同一来源地址默认限制为 10 分钟内 5 次请求，并返回 `Retry-After` 提示下一次可重试时间。
+应用无需账号、密码或注册即可使用。为了保护 AI 服务额度，`/api/generate` 对同一来源地址默认限制为 10 分钟内最多 5 次成功生成，并返回 `Retry-After` 提示下一次可重试时间。
 
-当前输入边界如下：请求体最多 1 MiB；旅行想法最多 2,000 个字符；沟通记录最多 8 条、每条最多 800 个字符；当前行程最多 16 天和 200 张卡片。超限的内容会被自动截断到边界内，只有结构性错误（如格式不是对象）才会被拒绝。异常情况下 API 只返回用户可理解的错误信息，不返回上游服务的原始错误详情。
+当前输入边界如下：请求体最多 1 MiB；旅行想法最多 2,000 个字符；沟通记录最多 8 条、每条最多 800 个字符；当前行程最多 16 天和 200 张卡片。请求体超过 1 MiB 会返回 413；请求体未超限时，超长字段会自动截断到边界内，只有结构性错误（如格式不是对象）才会被拒绝。异常情况下 API 只返回用户可理解的错误信息，不返回上游服务的原始错误详情。
 
 默认情况下限流键取自连接地址，客户端伪造的 `X-Real-IP` / `X-Forwarded-For` 不会生效；只有在可信反向代理之后部署时，才设置 `TRUST_PROXY=1` 让 API 改用代理覆写后的头（Docker Compose 部署已默认开启，前端 Nginx 仅信任内网代理覆写该头）。
 
@@ -149,7 +153,7 @@ npm i -g vercel
 vercel
 ```
 
-部署后需在 Vercel Dashboard 中设置环境变量 `DEEPSEEK_API_KEY`；如需优先使用和风天气，再配置 `QWEATHER_API_KEY`、`QWEATHER_BASE_URL` 和 `QWEATHER_GEO_URL`。未配置和风天气时会回退到 Open-Meteo。
+部署后需在 Vercel Dashboard 中设置环境变量 `DEEPSEEK_API_KEY`；如需优先使用和风天气，再配置 `QWEATHER_API_KEY`、`QWEATHER_BASE_URL` 和 `QWEATHER_GEO_URL`。Vercel 通常保持 `TRUST_PROXY=0`，未配置和风天气时会回退到 Open-Meteo。
 
 ### 火山云 Docker
 
