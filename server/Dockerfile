@@ -6,6 +6,7 @@ COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 
 COPY server ./server
+COPY src/utils/plan.js ./src/utils/plan.js
 
 ENV NODE_ENV=production \
     API_PORT=8787 \
