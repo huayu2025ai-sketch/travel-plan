@@ -80,8 +80,9 @@ export async function generateTravelPlan(idea, context = {}) {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      model: 'deepseek-chat',
+      model: 'deepseek-flash',
       response_format: { type: 'json_object' },
+      thinking: { type: 'disabled' },
       temperature: 0.7,
       messages: [
         { role: 'system', content: systemPrompt },
@@ -120,8 +121,9 @@ async function extractTripContext(idea, context, deepseekBaseUrl) {
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      model: 'deepseek-chat',
+      model: 'deepseek-flash',
       response_format: { type: 'json_object' },
+      thinking: { type: 'disabled' },
       temperature: 0,
       messages: [
         { role: 'system', content: extractionSystemPrompt },

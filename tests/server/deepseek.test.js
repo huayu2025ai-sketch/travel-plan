@@ -146,6 +146,29 @@ describe('generateTravelPlan', () => {
     });
   });
 
+  it('uses DeepSeek V4.1 Flash with thinking disabled for both JSON requests', async () => {
+    const requestBodies = [];
+    vi.stubGlobal('fetch', vi.fn().mockImplementation(async (_input, options) => {
+      const body = JSON.parse(options.body);
+      requestBodies.push(body);
+      const isExtraction = body.messages[0].content.includes('旅游信息抽取助手');
+      const content = isExtraction
+        ? { destination: '杭州', start_date: '', days: 1 }
+        : { destination: '杭州', itinerary: { 'Day 1': [] } };
+      return createJsonResponse({ choices: [{ message: { content: JSON.stringify(content) } }] });
+    }));
+
+    await generateTravelPlan('杭州一日游');
+
+    expect(requestBodies).toHaveLength(2);
+    for (const body of requestBodies) {
+      expect(body.model).toBe('deepseek-flash');
+      expect(body.response_format).toEqual({ type: 'json_object' });
+      expect(body.thinking).toEqual({ type: 'disabled' });
+    }
+    expect(requestBodies.map(({ temperature }) => temperature)).toEqual([0, 0.7]);
+  });
+
   it('includes the current plan and recent history in the prompt', async () => {
     const requestBodies = [];
     vi.stubGlobal(
