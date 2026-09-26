@@ -106,14 +106,11 @@ export function TripCard({
           />
           <div className="grid grid-cols-2 gap-2">
             <input
-              type="number"
-              min="0"
-              step="1"
-              inputMode="numeric"
+              type="text"
               value={editForm.cost}
               onChange={(event) => onEditField('cost', event.target.value)}
               className="h-9 rounded-lg border border-stone-200/80 bg-white px-2 text-sm text-stone-700 outline-none transition-all duration-200 placeholder:text-stone-400 focus:border-stone-400 dark:border-[#3a3630]/80 dark:bg-[#2a2724] dark:text-[#b5afa6] dark:placeholder:text-[#5e584f] dark:focus:border-[#5a554e]"
-              placeholder="金额（元）"
+              placeholder="费用：200-300元 / 260元/晚×3晚"
             />
             <input
               value={editForm.duration}

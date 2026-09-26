@@ -13,7 +13,8 @@
 - **拖拽看板** — 天数横向排序、卡片跨天拖拽、同天内重新排序；行李清单同样支持拖拽排序
 - **类型筛选** — 按交通 / 景点 / citywalk / 美食 / 酒店 / 娱乐 / 工作筛选卡片并显示各类型数量；筛选视图仅用于查看，此时拖拽排序暂停
 - **灵活编辑** — 卡片支持添加 / 编辑 / 复制 / 删除，天数支持追加与删除（至少保留一天，删除含内容的当天需二次确认）；可设置出发日期，自动推算其余天数的日期、星期与周末标识
-- **预算自动汇总** — 按卡片费用自动累计预算区间，顶部摘要卡同时展示推荐交通、规划范围（天数 · 项数）与携带物品进度
+- **预算自动汇总** — 保留费用区间、识别免费项目，并支持「单价/晚 × 晚数」等明确数量的费用；未知费用单独计数，不再误算为 0 元
+- **预算录入格式** — 卡片费用可填「200-300元」或「260元/晚×3晚」；带人数或数量的费用请写明乘数，避免猜测同行人数
 - **行李清单** — 添加、编辑、勾选、删除、拖拽排序、分类筛选与模糊搜索；点击摘要卡片可平滑滚动到清单，看板与清单均支持折叠
 - **数据导入导出** — JSON、Markdown、PNG 图片三种导出，以及 JSON 备份恢复
 - **外观与体验** — 亮 / 暗 / 跟随系统主题（页面加载前预置主题 class 避免闪烁）、生成进度条与阶段提示、AI 请求 / 响应调试面板
@@ -112,10 +113,13 @@ travel-plan/
 │   ├── main.jsx           # 浏览器挂载入口
 │   ├── App.jsx            # 应用编排、状态与导入导出交互（含 PNG 导出绘制）
 │   ├── components/
+│   │   ├── ItineraryBoard.jsx       # 行程看板、筛选与编辑表单
 │   │   ├── ItineraryComponents.jsx  # 行程卡片、天数列与行李清单 UI
+│   │   ├── PlanSummary.jsx          # 预算、交通、行程和行李摘要
+│   │   ├── PlanExportMenu.jsx       # JSON / Markdown / 图片导出菜单
 │   │   └── TravelControls.jsx       # 主题切换与生成进度组件
 │   ├── hooks/useTheme.js  # 亮 / 暗 / 跟随系统主题
-│   ├── utils/             # date（日期推算）、plan（数据模型与预算）、storage（本地存储）、export（导出）
+│   ├── utils/             # 日期、预算、行程归一化、天气有效性、并发编辑合并、图片与文件导出
 │   └── styles.css         # 全局样式与 Tailwind 指令
 ├── server/
 │   ├── index.js           # Express 独立后端入口
@@ -148,14 +152,17 @@ npm test -- tests/server/deepseek.test.js   # 运行单个测试文件
 npm test -- --reporter=verbose              # 详细输出
 ```
 
-当前共 4 个测试文件、35 个用例，全部通过：
+当前共 7 个测试文件、45 个用例，全部通过：
 
 | 文件 | 覆盖内容 |
 |------|----------|
 | `tests/server/deepseek.test.js` | 生成流程、重试逻辑、上下文注入、和风天气日期映射与 Open-Meteo 回退边界 |
 | `tests/server/request-guard.test.js` | 请求校验、限流行为、公开错误收敛 |
+| `tests/server/generate-handler.test.js` | 并发配额预留、失败释放、已解析请求体大小限制 |
 | `tests/api/generate.test.js` | Vercel 路由方法守卫、参数校验与异常收敛 |
 | `tests/components/App.test.jsx` | 行李清单与自定义卡片关键交互 |
+| `tests/utils/plan.test.js` | 费用区间、按晚计价与未知费用汇总 |
+| `tests/utils/plan-merge.test.js` | 生成期间的手动修改保护与天气日期有效性 |
 
 框架为 Vitest v4 + `@testing-library/react`（组件测试用 jsdom 环境，服务端测试需在文件顶部声明 `// @vitest-environment node`），详见 `TESTING.md`。
 

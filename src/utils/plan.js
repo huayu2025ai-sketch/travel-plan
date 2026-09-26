@@ -73,23 +73,38 @@ export function getFuzzyMatchScore(text, query) {
 }
 
 export function parseCostAmount(value) {
+  return parseCostEstimate(value)?.min ?? null;
+}
+
+export function parseCostEstimate(value) {
   const text = String(value || '').trim();
   if (!text) return null;
-  if (text.includes('免费')) return 0;
+  if (text.includes('免费')) return { min: 0, max: 0, currency: 'CNY', basis: 'total' };
 
-  const match = text.replace(/,/g, '').match(/\d+(?:\.\d+)?/);
-  return match ? Number(match[0]) : null;
+  const normalized = text.replace(/,/g, '').replace(/[×✕]/g, 'x');
+  const multiplied = normalized.match(/(\d+(?:\.\d+)?)\s*(?:元|人民币)?\s*\/\s*(?:晚|天|人|间|张|个|次)\s*x\s*(\d+(?:\.\d+)?)/i);
+  if (multiplied) {
+    const total = Number(multiplied[1]) * Number(multiplied[2]);
+    return { min: total, max: total, currency: 'CNY', basis: 'total' };
+  }
+
+  const range = normalized.match(/(\d+(?:\.\d+)?)\s*[-~～至到]\s*(\d+(?:\.\d+)?)/);
+  const first = normalized.match(/\d+(?:\.\d+)?/);
+  if (!first) return null;
+  const min = range ? Number(range[1]) : Number(first[0]);
+  const max = range ? Number(range[2]) : min;
+  return { min: Math.min(min, max), max: Math.max(min, max), currency: 'CNY', basis: 'total' };
 }
 
 export function formatCostAmount(value) {
-  const amount = parseCostAmount(value);
-  if (amount === null) return '待估算';
-  return `${Math.max(0, Math.round(amount))}元`;
+  const text = String(value || '').trim();
+  if (!text) return '待估算';
+  if (parseCostEstimate(text) === null) return text;
+  return /元|免费/.test(text) ? text : `${text}元`;
 }
 
 export function getCostInputValue(value) {
-  const amount = parseCostAmount(value);
-  return amount === null ? '' : String(Math.max(0, Math.round(amount)));
+  return String(value || '').replace(/待估算/g, '').trim();
 }
 
 export function getAllItems(itinerary) {
@@ -97,14 +112,14 @@ export function getAllItems(itinerary) {
 }
 
 export function getBudgetRange(itinerary) {
-  const total = getAllItems(itinerary).reduce((sum, item) => {
-    const amount = parseCostAmount(item.cost);
-    return sum + (amount || 0);
-  }, 0);
-  const lower = Math.floor(total / 1000) * 1000;
-  const upper = lower + 1000;
-
-  return `${lower}-${upper}元`;
+  const items = getAllItems(itinerary);
+  const estimates = items.map((item) => parseCostEstimate(item.cost) || item.cost_estimate).filter(Boolean);
+  const unknownCount = items.length - estimates.length;
+  if (!estimates.length) return unknownCount ? `待估算（${unknownCount}项）` : '0元';
+  const lower = Math.round(estimates.reduce((sum, estimate) => sum + estimate.min, 0));
+  const upper = Math.round(estimates.reduce((sum, estimate) => sum + estimate.max, 0));
+  const range = lower === upper ? `${lower}元` : `${lower}-${upper}元`;
+  return unknownCount ? `${range}（另有${unknownCount}项待估）` : range;
 }
 
 export function withComputedBudget(plan) {

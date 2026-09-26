@@ -1,4 +1,5 @@
 import { createPublicError, maxIdeaCharacters } from './request-guard.js';
+import { parseCostEstimate } from '../src/utils/plan.js';
 
 const allowedTypes = new Set(['交通', '景点', 'citywalk', '美食', '酒店', '娱乐', '工作']);
 
@@ -605,6 +606,9 @@ export function normalizePlan(plan, weatherByDay = null, tripContext = null) {
     total_budget_estimate: String(plan.total_budget_estimate || '待估算'),
     recommended_transport: String(plan.recommended_transport || '待推荐'),
     weather: normalizedWeather,
+    weather_context: weatherByDay && tripContext?.destination && tripContext?.start_date
+      ? { destination: tripContext.destination, start_date: tripContext.start_date }
+      : null,
     itinerary: normalizedItinerary,
   };
 }
@@ -626,6 +630,7 @@ function normalizeItem(item, day, index, seenIds) {
     type,
     title: String(item?.title || '未命名行程'),
     cost: String(item?.cost || '待估算'),
+    cost_estimate: parseCostEstimate(item?.cost),
     duration: String(item?.duration || '待安排'),
     advice: String(item?.advice || '暂无建议。'),
   };

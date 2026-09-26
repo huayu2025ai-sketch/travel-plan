@@ -28,7 +28,7 @@ npm test
 
 ## Current coverage
 
-The current suite contains four test files and 35 cases. `tests/server/deepseek.test.js` covers DeepSeek response normalization, retry behavior, context injection, QWeather date mapping, and the Open-Meteo fallback boundary. `tests/server/request-guard.test.js` covers request validation, rate-limit behavior, and public error shaping. `tests/api/generate.test.js` covers the Vercel route handler, and `tests/components/App.test.jsx` covers packing-list and custom-card interactions. Smoke and full browser E2E tests are not yet implemented.
+The current suite contains seven test files and 45 cases. It covers DeepSeek response normalization, retry and weather-provider behavior; request validation, concurrency-safe quota reservations and body limits; Vercel route behavior; budget parsing and concurrent edit/weather validity; plus key App interactions including edits made while AI generation is pending. Smoke and full browser E2E tests are not yet implemented.
 
 ## Conventions
 

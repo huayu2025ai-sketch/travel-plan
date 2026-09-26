@@ -8,6 +8,7 @@ export const maxItineraryItems = 200;
 const rateLimitWindowMs = 10 * 60 * 1000;
 const rateLimitMaxRequests = 5;
 const rateLimitBuckets = new Map();
+const pendingGenerateRequests = new Map();
 
 export function validateGenerateRequest(body) {
   if (!body || typeof body !== 'object' || Array.isArray(body)) {
@@ -47,23 +48,45 @@ export function validateGenerateRequest(body) {
   return { idea, currentPlan, history };
 }
 
-// 限流拆分为两步：checkGenerateRateLimit 只查询配额，recordGenerateHit 在生成成功后
-// 才记录一次。失败请求（校验不过、上游 5xx、配置缺失）不再消耗配额，避免把已经
-// 出错的用户锁在窗口外。
+// 配额先为运行中的生成请求预留，成功后计入窗口，失败时释放预留。
 export function checkGenerateRateLimit(request) {
   const now = Date.now();
   const key = getClientKey(request);
   const existing = rateLimitBuckets.get(key) || [];
   const recent = existing.filter((timestamp) => now - timestamp < rateLimitWindowMs);
 
-  if (recent.length >= rateLimitMaxRequests) {
+  const pending = pendingGenerateRequests.get(key) || 0;
+  if (recent.length + pending >= rateLimitMaxRequests) {
     return {
       allowed: false,
-      retryAfterSeconds: Math.max(1, Math.ceil((rateLimitWindowMs - (now - recent[0])) / 1000)),
+      retryAfterSeconds: recent.length
+        ? Math.max(1, Math.ceil((rateLimitWindowMs - (now - recent[0])) / 1000))
+        : 1,
     };
   }
 
   return { allowed: true, retryAfterSeconds: 0 };
+}
+
+// Reserve a slot before awaiting the upstream AI service, so simultaneous requests
+// cannot all pass the same check. Failed requests release their reservation.
+export function reserveGenerateRequest(request) {
+  const key = getClientKey(request);
+  const check = checkGenerateRateLimit(request);
+  if (!check.allowed) return { ...check, commit() {}, release() {} };
+
+  pendingGenerateRequests.set(key, (pendingGenerateRequests.get(key) || 0) + 1);
+  let settled = false;
+  const settle = (successful) => {
+    if (settled) return;
+    settled = true;
+    const pending = pendingGenerateRequests.get(key) || 0;
+    if (pending <= 1) pendingGenerateRequests.delete(key);
+    else pendingGenerateRequests.set(key, pending - 1);
+    if (successful) recordGenerateHit(request);
+  };
+
+  return { allowed: true, retryAfterSeconds: 0, commit: () => settle(true), release: () => settle(false) };
 }
 
 export function recordGenerateHit(request) {
@@ -77,6 +100,11 @@ export function recordGenerateHit(request) {
   if (rateLimitBuckets.size >= 1024) {
     pruneRateLimitBuckets(now);
   }
+}
+
+export function resetGenerateLimitsForTests() {
+  rateLimitBuckets.clear();
+  pendingGenerateRequests.clear();
 }
 
 export function createRateLimitError(retryAfterSeconds) {
