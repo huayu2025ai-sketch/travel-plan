@@ -172,7 +172,7 @@ npm test -- --reporter=verbose              # 详细输出
 
 当前输入边界如下：请求体最多 1 MiB；旅行想法最多 2,000 个字符；沟通记录最多 8 条、每条最多 800 个字符；当前行程最多 16 天和 200 张卡片。请求体超过 1 MiB 会返回 413；请求体未超限时，超长字段会自动截断到边界内，只有结构性错误（如格式不是对象）才会被拒绝。异常情况下 API 只返回用户可理解的错误信息，上游错误详情仅记录在服务端日志。
 
-默认情况下限流键取自连接地址，客户端伪造的 `X-Real-IP` / `X-Forwarded-For` 不会生效；只有在可信反向代理之后部署时，才设置 `TRUST_PROXY=1` 让 API 改用代理覆写后的头（Docker Compose 部署已默认开启，前端 Nginx 仅信任内网代理覆写该头）。
+默认情况下限流键取自连接地址，客户端伪造的 `X-Real-IP` / `X-Forwarded-For` 不会生效。Vercel 部署自动使用平台覆写的 `X-Forwarded-For`；其他可信反向代理需设置 `TRUST_PROXY=1` 才使用代理 IP（Docker Compose 已默认开启，前端 Nginx 仅信任内网代理覆写该头）。
 
 当前限流状态保存在 API 进程内。对于 Vercel 多实例部署，各实例分别计数；如需全局统一配额，需要接入共享限流存储。
 
@@ -203,7 +203,7 @@ npm i -g vercel
 vercel
 ```
 
-部署后需在 Vercel Dashboard 中设置环境变量 `DEEPSEEK_API_KEY`；如需优先使用和风天气，再配置 `QWEATHER_API_KEY`、`QWEATHER_BASE_URL` 和 `QWEATHER_GEO_URL`。Vercel 通常保持 `TRUST_PROXY=0`，未配置和风天气时会回退到 Open-Meteo。
+部署后需在 Vercel Dashboard 中设置环境变量 `DEEPSEEK_API_KEY`；如需优先使用和风天气，再配置 `QWEATHER_API_KEY`、`QWEATHER_BASE_URL` 和 `QWEATHER_GEO_URL`。Vercel 的客户端 IP 头由平台覆写并自动用于限流，无需开启 `TRUST_PROXY`；未配置和风天气时会回退到 Open-Meteo。
 
 ### Docker Compose
 

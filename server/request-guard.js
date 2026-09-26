@@ -176,6 +176,10 @@ function getClientKey(request) {
 // 只有在确认前面是不可伪造客户端头的反向代理时才开启（Docker 部署里前端 Nginx
 // 会用 $remote_addr 覆写这些头）。直连暴露时保持关闭，否则限流可被伪造头绕过。
 function isTrustedProxyEnabled() {
+  // Vercel overwrites X-Forwarded-For at its edge, so it is a trusted source
+  // even when TRUST_PROXY is unset (or explicitly disabled for custom proxies).
+  if (process.env.VERCEL === '1') return true;
+
   const value = process.env.TRUST_PROXY;
   return value === '1' || value === 'true';
 }

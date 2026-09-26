@@ -77,6 +77,7 @@ describe('validateGenerateRequest', () => {
 describe('generate rate limit', () => {
   afterEach(() => {
     delete process.env.TRUST_PROXY;
+    delete process.env.VERCEL;
   });
 
   it('rejects the sixth successful request from one client', () => {
@@ -100,6 +101,18 @@ describe('generate rate limit', () => {
 
     recordGenerateHit(request);
     expect(checkGenerateRateLimit(request).allowed).toBe(true);
+  });
+
+  it('keeps quotas separate for different client IPs', () => {
+    const firstClient = { socket: { remoteAddress: '198.51.100.20' } };
+    const secondClient = { socket: { remoteAddress: '198.51.100.21' } };
+
+    for (let index = 0; index < 5; index += 1) {
+      recordGenerateHit(firstClient);
+    }
+
+    expect(checkGenerateRateLimit(firstClient).allowed).toBe(false);
+    expect(checkGenerateRateLimit(secondClient).allowed).toBe(true);
   });
 
   it('ignores spoofed forwarded headers when the proxy is not trusted', () => {
@@ -126,6 +139,24 @@ describe('generate rate limit', () => {
 
     expect(checkGenerateRateLimit(behindProxy).allowed).toBe(false);
     expect(checkGenerateRateLimit({ socket: { remoteAddress: '10.0.0.2' } }).allowed).toBe(true);
+  });
+
+  it('uses Vercel’s platform-overwritten client IP header automatically', () => {
+    process.env.VERCEL = '1';
+    const client = {
+      socket: { remoteAddress: '10.0.0.2' },
+      headers: { 'x-forwarded-for': '198.51.100.30' },
+    };
+
+    for (let index = 0; index < 5; index += 1) {
+      recordGenerateHit(client);
+    }
+
+    expect(checkGenerateRateLimit(client).allowed).toBe(false);
+    expect(checkGenerateRateLimit({
+      socket: { remoteAddress: '10.0.0.2' },
+      headers: { 'x-forwarded-for': '198.51.100.31' },
+    }).allowed).toBe(true);
   });
 });
 
