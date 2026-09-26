@@ -8,7 +8,7 @@
 
 ## 功能特性
 
-- **AI 行程生成** — 输入旅行想法，先抽取目的地与出行日期，再按日期匹配和风天气 7 天预报；当预报无法覆盖完整行程或服务不可用时，复用已解析坐标回退到 Open-Meteo，并结合 DeepSeek 生成带预算、交通、每日安排与天气的行程
+- **AI 行程生成** — 使用 DeepSeek V4.1 Flash（API 模型 ID：`deepseek-flash`）抽取目的地与出行日期并生成行程；先按日期匹配和风天气 7 天预报，预报无法覆盖完整行程或服务不可用时复用已解析坐标回退到 Open-Meteo，最终生成带预算、交通、每日安排与天气的行程
 - **上下文优化** — 生成后继续输入要求即可在原草案上调整；当前行程与最近 8 条沟通记录保存在浏览器本地（每次请求携带最近 6 条），点击「清空行程」一并清除
 - **拖拽看板** — 天数横向排序、卡片跨天拖拽、同天内重新排序；行李清单同样支持拖拽排序
 - **类型筛选** — 按交通 / 景点 / citywalk / 美食 / 酒店 / 娱乐 / 工作筛选卡片并显示各类型数量；筛选视图仅用于查看，此时拖拽排序暂停
@@ -54,7 +54,7 @@ QWEATHER_GEO_URL=https://geoapi.qweather.com/v2
 
 | 变量 | 必填 | 说明 |
 |------|------|------|
-| `DEEPSEEK_API_KEY` | 是 | 生成行程必需，在 [DeepSeek 开放平台](https://platform.deepseek.com/) 获取 |
+| `DEEPSEEK_API_KEY` | 是 | 调用 DeepSeek V4.1 Flash（`deepseek-flash`）生成行程必需，在 [DeepSeek 开放平台](https://platform.deepseek.com/) 获取 |
 | `DEEPSEEK_BASE_URL` | 否 | 默认 `https://api.deepseek.com`，使用代理或兼容接口时可修改 |
 | `API_PORT` | 否 | 独立 Express 服务端口，默认 `8787` |
 | `TRUST_PROXY` | 否 | 设为 `1` / `true` 时才信任代理覆写的 `X-Real-IP` / `X-Forwarded-For`；Docker Compose 已配置为 `1` |
@@ -168,7 +168,7 @@ npm test -- --reporter=verbose              # 详细输出
 
 ## 请求限制
 
-应用无需账号、密码或注册即可使用。为了保护 AI 服务额度，`/api/generate` 对同一来源地址默认限制为 10 分钟内最多 5 次成功生成（配额只在生成成功后计入，失败请求不消耗），超限返回 429 并附带 `Retry-After` 提示下一次可重试时间。
+应用无需账号、密码或注册即可使用。为了保护 AI 服务额度，`/api/generate` 按请求来源 IP 限制：每个 IP 在 10 分钟内最多成功生成 5 次。并发请求会先预留配额，避免同时到达的请求绕过限制；生成失败会释放预留额度，成功后才计入。超限返回 429，并通过 `Retry-After` 提示重试时间。
 
 当前输入边界如下：请求体最多 1 MiB；旅行想法最多 2,000 个字符；沟通记录最多 8 条、每条最多 800 个字符；当前行程最多 16 天和 200 张卡片。请求体超过 1 MiB 会返回 413；请求体未超限时，超长字段会自动截断到边界内，只有结构性错误（如格式不是对象）才会被拒绝。异常情况下 API 只返回用户可理解的错误信息，上游错误详情仅记录在服务端日志。
 
@@ -248,7 +248,7 @@ npm run server
 - **拖拽**：@hello-pangea/dnd
 - **图标**：Lucide React
 - **后端**：Express 5（可选独立部署）/ Vercel Serverless Functions
-- **AI**：DeepSeek Chat API
+- **AI**：DeepSeek API，模型 `deepseek-flash`（DeepSeek V4.1 Flash；请求中关闭思考模式以保留 temperature 参数效果）
 - **天气**：和风天气（可选优先）/ Open-Meteo（回退）
 - **测试**：Vitest 4, Testing Library, jsdom
 
