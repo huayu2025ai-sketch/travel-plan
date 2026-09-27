@@ -1,4 +1,4 @@
-import { formatCostAmount, getBudgetRange, packingCategories, parseCostEstimate, typeOptions } from './plan.js';
+import { formatCostAmount, getBudgetRange, parseCostEstimate, typeOptions } from './plan.js';
 import { renumberItineraryDays } from './date.js';
 
 export function normalizeImportedPlan(value) {
@@ -45,17 +45,6 @@ export function normalizeImportedPlan(value) {
 
   const renumberedItinerary = renumberItineraryDays(normalizedItinerary);
 
-  const normalizedPackingItems = Array.isArray(value.packing_items)
-    ? value.packing_items.map((item, index) => ({
-        id: String(item?.id || `packing-${Date.now()}-${index}`).replace(/[^a-zA-Z0-9-_]/g, '-'),
-        name: String(item?.name || '未命名物品'),
-        category: packingCategories.includes(item?.category) ? item.category : '其他',
-        quantity: String(item?.quantity || '1'),
-        packed: Boolean(item?.packed),
-        note: String(item?.note || ''),
-      }))
-    : [];
-
   const normalizedWeather = {};
   const rawWeather = value.weather && typeof value.weather === 'object' ? value.weather : {};
   for (const day of Object.keys(renumberedItinerary)) {
@@ -71,8 +60,6 @@ export function normalizeImportedPlan(value) {
     weather_context: value.weather_context && typeof value.weather_context === 'object'
       ? value.weather_context
       : null,
-    packing_items: normalizedPackingItems,
     itinerary: renumberedItinerary,
   };
 }
-

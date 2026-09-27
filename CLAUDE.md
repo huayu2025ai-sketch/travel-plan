@@ -56,24 +56,21 @@ Vite loads `.env` automatically in dev mode. The standalone server relies on `do
 
 ## High-level architecture
 
-This is a React + Vite frontend with a small Node.js API layer. `src/main.jsx` only mounts the app; `src/App.jsx` coordinates application state and high-level interactions, while reusable UI, hooks, and utilities live under `src/components/`, `src/hooks/`, and `src/utils/`. The API logic lives in `server/deepseek.js` and is exposed through three interchangeable surfaces.
+This is a React + Vite frontend with a small Node.js API layer. `src/main.jsx` only mounts the app; `src/App.jsx` coordinates application state and high-level interactions, while reusable UI and utilities live under `src/components/` and `src/utils/`. The API logic lives in `server/deepseek.js` and is exposed through three interchangeable surfaces.
 
 ### Frontend (`src/App.jsx` and modules)
 
-- `App.jsx` coordinates the planning board, packing list, input forms, and print/export dialogs.
-- `components/ItineraryComponents.jsx` owns the itinerary cards, day columns, and packing list UI.
-- `components/TravelControls.jsx` owns theme and generation-progress controls.
-- `hooks/useTheme.js` owns the theme preference side effect.
+- `App.jsx` coordinates the planning board, input forms, and print/export dialogs.
+- `components/ItineraryComponents.jsx` owns the itinerary cards and day columns.
+- `components/TravelControls.jsx` owns generation-progress controls.
 - `utils/date.js`, `utils/plan.js`, `utils/storage.js`, and `utils/export.js` isolate date mapping, plan data, persistence, and export behavior.
 - State is held in React hooks and persisted to `localStorage`:
   - `travel-plan-board-v1` stores the current trip plan.
   - `travel-plan-conversation-v1` stores the recent conversation history used for contextual refinements.
-  - `travel-plan-theme` stores the light/dark theme preference.
 - The core data model is a "plan" object:
   - `destination`, `start_date`, `total_budget_estimate`, `recommended_transport`
   - `weather`: map of `Day N` → weather summary string
   - `itinerary`: map of `Day N` → array of cards
-  - `packing_items`: array of packing objects
 - Each itinerary card has `{ id, type, title, cost, duration, advice }`. Valid `type` values are: `交通`, `景点`, `citywalk`, `美食`, `酒店`, `娱乐`, `工作`.
 - Drag-and-drop uses `@hello-pangea/dnd` for reordering cards within a day, moving cards across days, and reordering days.
 - Budget computation is derived from card `cost` strings via `parseCostAmount`/`getBudgetRange`.
@@ -126,7 +123,7 @@ The limiter is intentionally dependency-free and process-local. In a multi-insta
 - `tests/server/deepseek.test.js` covers generation flow, retry logic, QWeather date mapping, and the Open-Meteo fallback boundary.
 - `tests/server/request-guard.test.js` covers request validation, rate-limit behavior, and public error shaping.
 - `tests/api/generate.test.js` covers the Vercel route method guard, validation, successful responses, and unexpected-error convergence.
-- `tests/components/App.test.jsx` covers key packing-list and custom-card interactions.
+- `tests/components/App.test.jsx` covers key custom-card interactions.
 - CI runs `npm test` on every push and pull request to `master` or `main` via `.github/workflows/test.yml`.
 
 ## Deployment notes

@@ -1,11 +1,11 @@
 export const typeStyles = {
-  交通: 'border-sky-200 bg-sky-50 text-sky-700 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-400',
-  景点: 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-400',
-  citywalk: 'border-lime-200 bg-lime-50 text-lime-700 dark:border-lime-900 dark:bg-lime-950/40 dark:text-lime-400',
-  美食: 'border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-400',
-  酒店: 'border-violet-200 bg-violet-50 text-violet-700 dark:border-violet-900 dark:bg-violet-950/40 dark:text-violet-400',
-  娱乐: 'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-400',
-  工作: 'border-cyan-200 bg-cyan-50 text-cyan-700 dark:border-cyan-900 dark:bg-cyan-950/40 dark:text-cyan-400',
+  交通: 'border-sky-200 bg-sky-50 text-sky-700   ',
+  景点: 'border-emerald-200 bg-emerald-50 text-emerald-700   ',
+  citywalk: 'border-lime-200 bg-lime-50 text-lime-700   ',
+  美食: 'border-amber-200 bg-amber-50 text-amber-700   ',
+  酒店: 'border-violet-200 bg-violet-50 text-violet-700   ',
+  娱乐: 'border-rose-200 bg-rose-50 text-rose-700   ',
+  工作: 'border-cyan-200 bg-cyan-50 text-cyan-700   ',
 };
 
 export const typeAccent = {
@@ -19,10 +19,9 @@ export const typeAccent = {
 };
 
 export const typeOptions = ['交通', '景点', 'citywalk', '美食', '酒店', '娱乐', '工作'];
-export const packingCategories = ['证件', '衣物', '洗护', '电子', '药品', '其他'];
 
 export function getTypeBadgeClass(type) {
-  return typeStyles[type] || 'border-stone-200 bg-stone-50 text-stone-700 dark:border-[#3a3630] dark:bg-[#252320] dark:text-[#b5afa6]';
+  return typeStyles[type] || 'border-stone-200 bg-stone-50 text-stone-700   ';
 }
 
 export function getCardGlowClass(type) {
@@ -45,15 +44,6 @@ export function createEmptyCardForm(day) {
     cost: '',
     duration: '',
     advice: '',
-  };
-}
-
-export function createEmptyPackingForm() {
-  return {
-    name: '',
-    category: '其他',
-    quantity: '1',
-    note: '',
   };
 }
 

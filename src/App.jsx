@@ -1,5 +1,4 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { PackingList } from './components/ItineraryComponents.jsx';
 import { PlanSummary } from './components/PlanSummary.jsx';
 import { ItineraryBoard } from './components/ItineraryBoard.jsx';
 import { normalizeImportedPlan } from './utils/plan-normalize.js';
@@ -14,8 +13,7 @@ import {
   Sparkles,
   X,
 } from 'lucide-react';
-import { LoadingProgress, ThemeToggle } from './components/TravelControls.jsx';
-import { useTheme } from './hooks/useTheme.js';
+import { LoadingProgress } from './components/TravelControls.jsx';
 import { loadStoredConversation, loadStoredPlan } from './utils/storage.js';
 import { createTemplatePlan } from './content/templates.js';
 import { clearTemplateParameter, getTemplateStart } from './utils/template-start.js';
@@ -29,15 +27,14 @@ import {
 import {
   createCardEditForm,
   createEmptyCardForm,
-  createEmptyPackingForm,
   formatCostAmount,
   getAllItems,
   getBudgetRange,
-  packingCategories,
   typeOptions,
   withComputedBudget,
 } from './utils/plan.js';
 import './styles.css';
+import './app-theme.css';
 
 const initialTripPlan = {
   destination: '',
@@ -45,32 +42,6 @@ const initialTripPlan = {
   total_budget_estimate: '2500-3000元',
   recommended_transport: '高铁 + 市内网约车',
   weather: {},
-  packing_items: [
-    {
-      id: 'packing-id-card',
-      name: '身份证',
-      category: '证件',
-      quantity: '1',
-      packed: false,
-      note: '进站、入住都要用。',
-    },
-    {
-      id: 'packing-power-bank',
-      name: '充电宝',
-      category: '电子',
-      quantity: '1',
-      packed: false,
-      note: '注意容量符合乘车携带要求。',
-    },
-    {
-      id: 'packing-comfort-shoes',
-      name: '舒适步行鞋',
-      category: '衣物',
-      quantity: '1双',
-      packed: false,
-      note: '适合石窟和老城步行。',
-    },
-  ],
   itinerary: {
     'Day 1': [
       {
@@ -180,7 +151,6 @@ function compactPlanForAi(plan) {
     start_date: plan.start_date || '',
     total_budget_estimate: plan.total_budget_estimate || '',
     recommended_transport: plan.recommended_transport || '待推荐',
-    packing_items: plan.packing_items || [],
     itinerary: plan.itinerary,
   });
 }
@@ -188,7 +158,7 @@ function compactPlanForAi(plan) {
 function App() {
   const [templateStart] = useState(() => {
     const storedPlan = loadStoredPlan(initialTripPlan, normalizeImportedPlan);
-    const hasPersonalContext = (storedPlan.packing_items?.length > 0 && !isInitialDemoPlan(storedPlan)) || loadStoredConversation().length > 0;
+    const hasPersonalContext = loadStoredConversation().length > 0;
     let hasStoredPlan = false;
     try { hasStoredPlan = Boolean(window.localStorage.getItem(storageKey)); } catch { /* Storage may be unavailable. */ }
     const canReplace = !hasStoredPlan || (!hasPersonalContext && (!hasPlanContent(storedPlan) || isInitialDemoPlan(storedPlan)));
@@ -203,29 +173,21 @@ function App() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState(templateStart.invalid ? '没有找到这份模板，已保留当前行程。请从模板目录重新选择。' : '');
   const [cardForm, setCardForm] = useState(createEmptyCardForm('Day 1'));
-  const [packingForm, setPackingForm] = useState(createEmptyPackingForm);
-  const [editingPackingId, setEditingPackingId] = useState('');
-  const [editingPackingForm, setEditingPackingForm] = useState(createEmptyPackingForm);
   const [pendingDeleteId, setPendingDeleteId] = useState('');
   const [editingCardId, setEditingCardId] = useState('');
   const [editForm, setEditForm] = useState(createCardEditForm(initialTripPlan.itinerary['Day 1'][0]));
   const [importInputKey, setImportInputKey] = useState(0);
   const [isAddFormOpen, setIsAddFormOpen] = useState(false);
-  const [isPackingCollapsed, setIsPackingCollapsed] = useState(false);
   const [isBoardCollapsed, setIsBoardCollapsed] = useState(false);
   const [isExportMenuOpen, setIsExportMenuOpen] = useState(false);
   const [activeTypes, setActiveTypes] = useState(typeOptions);
-  const [activePackingCategory, setActivePackingCategory] = useState('全部');
-  const [packingSearchQuery, setPackingSearchQuery] = useState('');
   const [conversationHistory, setConversationHistory] = useState(() => templateStart.applied ? [] : loadStoredConversation());
   const [generationProgress, setGenerationProgress] = useState(0);
   const [generationStageIndex, setGenerationStageIndex] = useState(0);
   const [lastAiRequest, setLastAiRequest] = useState(null);
   const [lastAiResponse, setLastAiResponse] = useState(null);
   const [isAiDebugOpen, setIsAiDebugOpen] = useState(false);
-  const packingSectionRef = useRef(null);
   const planRevisionRef = useRef(0);
-  const { theme, setTheme } = useTheme();
   const days = Object.entries(plan.itinerary);
   const dayNames = Object.keys(plan.itinerary);
   const plannedDayCount = dayNames.length;
@@ -236,8 +198,6 @@ function App() {
   const visibleTypeSet = new Set(activeTypes);
   const visibleDays = days.map(([day, items]) => [day, isFilteredView ? items.filter((item) => visibleTypeSet.has(item.type)) : items]);
   const visibleItemCount = visibleDays.reduce((total, [, items]) => total + items.length, 0);
-  const packingItems = plan.packing_items || [];
-  const packedItemCount = packingItems.filter((item) => item.packed).length;
   const typeCounts = typeOptions.reduce((counts, type) => {
     counts[type] = getAllItems(plan.itinerary).filter((item) => item.type === type).length;
     return counts;
@@ -313,12 +273,8 @@ function App() {
     setIsAiDebugOpen(false);
     setEditingCardId('');
     setPendingDeleteId('');
-    setEditingPackingId('');
     setCardForm(createEmptyCardForm('Day 1'));
-    setPackingForm(createEmptyPackingForm());
     setActiveTypes(typeOptions);
-    setActivePackingCategory('全部');
-    setPackingSearchQuery('');
     setIsBoardCollapsed(false);
     setTemplateNotice(`已载入「${pendingTemplate.title}」，可以直接修改日期、费用和安排。`);
     trackProductEvent('template_use', { template: pendingTemplate.slug });
@@ -328,10 +284,6 @@ function App() {
 
   const setItinerary = (nextItinerary) => {
     updatePlan((currentPlan) => ({ ...currentPlan, itinerary: nextItinerary }));
-  };
-
-  const setPackingItems = (nextItems) => {
-    updatePlan((currentPlan) => ({ ...currentPlan, packing_items: nextItems }));
   };
 
   const setDayDate = (day, dayDateValue) => {
@@ -465,10 +417,7 @@ function App() {
       }
 
       const normalizedGeneratedPlan = normalizeImportedPlan(data);
-      const generatedPlan = {
-        ...normalizedGeneratedPlan,
-        packing_items: Array.isArray(data.packing_items) ? normalizedGeneratedPlan.packing_items : packingItems,
-      };
+      const generatedPlan = normalizedGeneratedPlan;
       const hasPlanChanged = planRevisionRef.current !== revisionAtStart;
       const nextPlan = hasPlanChanged
         ? preserveConcurrentPlanEdits(planAtStart, planRef.current, generatedPlan)
@@ -513,7 +462,6 @@ function App() {
       start_date: '',
       total_budget_estimate: '0-1000元',
       recommended_transport: '待推荐',
-      packing_items: [],
       itinerary: { 'Day 1': [] },
     };
 
@@ -528,17 +476,11 @@ function App() {
     updatePlan(() => emptyPlan, { trackEdit: false });
     setTemplateNotice('');
     setCardForm(createEmptyCardForm('Day 1'));
-    setPackingForm(createEmptyPackingForm());
-    setEditingPackingId('');
-    setEditingPackingForm(createEmptyPackingForm());
     setPendingDeleteId('');
     setEditingCardId('');
     setIsAddFormOpen(false);
-    setIsPackingCollapsed(false);
     setIsBoardCollapsed(false);
     setActiveTypes(typeOptions);
-    setActivePackingCategory('全部');
-    setPackingSearchQuery('');
     setConversationHistory([]);
     setLastAiRequest(null);
     setLastAiResponse(null);
@@ -572,117 +514,6 @@ function App() {
     });
     setCardForm(createEmptyCardForm(targetDay));
     setIsAddFormOpen(false);
-  };
-
-  const updatePackingForm = (field, value) => {
-    setPackingForm((currentForm) => ({ ...currentForm, [field]: value }));
-  };
-
-  const addPackingItem = (event) => {
-    event.preventDefault();
-    const name = packingForm.name.trim();
-
-    if (!name) {
-      setError('携带物品需要填写名称。');
-      return;
-    }
-
-    const newItem = {
-      id: `packing-${Date.now()}-${Math.random().toString(16).slice(2)}`,
-      name,
-      category: packingCategories.includes(packingForm.category) ? packingForm.category : '其他',
-      quantity: packingForm.quantity.trim() || '1',
-      packed: false,
-      note: packingForm.note.trim(),
-    };
-
-    setError('');
-    setPackingItems([...packingItems, newItem]);
-    setPackingForm(createEmptyPackingForm());
-  };
-
-  const togglePackingItem = (itemId) => {
-    setPackingItems(packingItems.map((item) => (item.id === itemId ? { ...item, packed: !item.packed } : item)));
-  };
-
-  const deletePackingItem = (itemId) => {
-    setPackingItems(packingItems.filter((item) => item.id !== itemId));
-  };
-
-  const reorderPackingItems = (sourceIndex, destinationIndex, visibleItems) => {
-    const movingItem = visibleItems[sourceIndex];
-    if (!movingItem || sourceIndex === destinationIndex) return;
-
-    const visibleItemsWithoutMoving = visibleItems.filter((item) => item.id !== movingItem.id);
-    const nextItems = packingItems.filter((item) => item.id !== movingItem.id);
-    const anchorItem = visibleItemsWithoutMoving[destinationIndex];
-    const lastVisibleItem = visibleItemsWithoutMoving[visibleItemsWithoutMoving.length - 1];
-    const insertIndex = anchorItem
-      ? nextItems.findIndex((item) => item.id === anchorItem.id)
-      : lastVisibleItem
-        ? nextItems.findIndex((item) => item.id === lastVisibleItem.id) + 1
-        : nextItems.length;
-
-    nextItems.splice(Math.max(0, insertIndex), 0, movingItem);
-    setPackingItems(nextItems);
-  };
-
-  const startEditPackingItem = (itemId) => {
-    const item = packingItems.find((i) => i.id === itemId);
-    if (!item) return;
-    setEditingPackingId(itemId);
-    setEditingPackingForm({
-      name: item.name,
-      category: packingCategories.includes(item.category) ? item.category : '其他',
-      quantity: item.quantity || '1',
-      note: item.note || '',
-    });
-  };
-
-  const updateEditingPackingForm = (field, value) => {
-    setEditingPackingForm((prev) => ({ ...prev, [field]: value }));
-  };
-
-  const savePackingItemEdit = () => {
-    const name = editingPackingForm.name.trim();
-    if (!name) {
-      setError('携带物品需要填写名称。');
-      return;
-    }
-
-    setPackingItems(
-      packingItems.map((item) =>
-        item.id === editingPackingId
-          ? {
-              ...item,
-              name,
-              category: packingCategories.includes(editingPackingForm.category) ? editingPackingForm.category : '其他',
-              quantity: editingPackingForm.quantity.trim() || '1',
-              note: editingPackingForm.note.trim(),
-            }
-          : item,
-      ),
-    );
-    setError('');
-    setEditingPackingId('');
-    setEditingPackingForm(createEmptyPackingForm());
-  };
-
-  const cancelPackingItemEdit = () => {
-    setEditingPackingId('');
-    setEditingPackingForm(createEmptyPackingForm());
-  };
-
-  const clearPackingFilters = () => {
-    setActivePackingCategory('全部');
-    setPackingSearchQuery('');
-  };
-
-  const scrollToPackingList = () => {
-    setIsPackingCollapsed(false);
-    window.requestAnimationFrame(() => {
-      packingSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    });
   };
 
   const deleteCard = (day, cardId) => {
@@ -824,11 +655,6 @@ function App() {
       const importedPlan = normalizeImportedPlan(JSON.parse(content));
       updatePlan(() => importedPlan, { trackEdit: false });
       setCardForm(createEmptyCardForm(Object.keys(importedPlan.itinerary)[0]));
-      setPackingForm(createEmptyPackingForm());
-      setEditingPackingId('');
-      setEditingPackingForm(createEmptyPackingForm());
-      setActivePackingCategory('全部');
-      setPackingSearchQuery('');
       setPendingDeleteId('');
       setEditingCardId('');
       setError('');
@@ -840,15 +666,15 @@ function App() {
   };
 
   return (
-    <main className="min-h-screen bg-[#f5f1e8] text-stone-900 transition-colors duration-400 dark:bg-[#141210] dark:text-[#e8e4df]">
+    <main className="travel-app min-h-screen">
       <div className="map-grid fixed inset-0 opacity-50" aria-hidden="true" />
-      <div className="relative mx-auto flex min-h-screen max-w-[1680px] flex-col px-4 py-5 sm:px-6 lg:px-8">
-        <nav aria-label="主导航" className="mb-4 flex flex-wrap items-center justify-between gap-3 text-sm text-stone-700 dark:text-stone-300">
+      <div className="travel-app-frame relative mx-auto flex min-h-screen w-full flex-col px-4 py-5 sm:px-6 lg:px-8">
+        <nav aria-label="主导航" className="travel-app-nav mb-4 flex flex-wrap items-center justify-between gap-3 text-sm">
           <a href="/" className="font-semibold">↗ 旅行规划看板</a>
           <div className="flex gap-5"><a href="/templates/">行程模板</a><a href="/guides/">使用指南</a></div>
         </nav>
         {pendingTemplate && (
-          <section aria-label="载入模板" className="mb-4 rounded-xl border border-amber-300 bg-amber-50 p-5 text-sm text-stone-800 dark:bg-stone-900 dark:text-stone-200">
+          <section aria-label="载入模板" className="mb-4 rounded-xl border border-amber-300 bg-amber-50 p-5 text-sm text-stone-800  ">
             <h2 className="font-bold">当前浏览器已有行程</h2>
             <p className="my-2">载入「{pendingTemplate.title}」会替换当前看板并清除 AI 沟通记录。请先通过下方导出菜单备份需要保留的行程。</p>
             <div className="flex flex-wrap gap-3">
@@ -857,42 +683,41 @@ function App() {
             </div>
           </section>
         )}
-        {templateNotice && <p role="status" className="mb-4 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-900 dark:bg-emerald-950 dark:text-emerald-200">{templateNotice}</p>}
-        <header className="animate-fade-up grid gap-5 rounded-2xl border border-stone-200/80 bg-white/85 p-5 shadow-soft backdrop-blur-lg transition-all duration-300 dark:border-[#3a3630]/80 dark:bg-[#1e1c1a]/85 dark:shadow-soft-dark md:grid-cols-[1.25fr_0.75fr] md:p-6">
+        {templateNotice && <p role="status" className="mb-4 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-900  ">{templateNotice}</p>}
+        <header className="travel-app-header animate-fade-up grid gap-5 rounded-2xl border border-stone-200/80 bg-white/85 p-5 shadow-soft backdrop-blur-lg transition-all duration-300 md:grid-cols-[1.25fr_0.75fr] md:p-6">
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <span className="ai-badge inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-white shadow-sm">
+              <span className="travel-app-badge inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-wider">
                 <Sparkles className="h-3 w-3" />
                 AI 旅行草案
               </span>
             </div>
-            <h1 className="mt-5 font-display text-4xl font-black leading-[1.15] tracking-tight text-stone-950 dark:text-[#e8e4df] md:text-5xl">
+            <h1 className="mt-5 font-display text-4xl font-black leading-[1.15] tracking-tight text-stone-950  md:text-5xl">
               把粗略想法整理成
               <br className="hidden sm:block" />
               可调整的每日行程
             </h1>
-            <p className="mt-3 max-w-3xl text-sm leading-6 text-stone-600 dark:text-[#9a9389] md:text-base">
+            <p className="mt-3 max-w-3xl text-sm leading-6 text-stone-600  md:text-base">
               输入目的地、天数和预算，生成可拖拽修改的每日行程。继续说出你的偏好，AI 会在当前安排上优化；也可以直接编辑并导出图片。
             </p>
           </div>
 
-          <form onSubmit={generatePlan} className="rounded-xl border border-stone-200/80 bg-[#fbfaf7]/90 p-3.5 backdrop-blur transition-all duration-300 dark:border-[#3a3630]/80 dark:bg-[#252320]/90">
+          <form onSubmit={generatePlan} className="rounded-xl border border-stone-200/80 bg-[#fbfaf7]/90 p-3.5 backdrop-blur transition-all duration-300  ">
             <div className="flex items-center justify-between">
-              <label htmlFor="trip-idea" className="text-sm font-semibold text-stone-800 dark:text-[#c4bdb4]">
+              <label htmlFor="trip-idea" className="text-sm font-semibold text-stone-800 ">
                 {hasAiContext ? '继续优化' : '旅行想法'}
               </label>
-              <ThemeToggle theme={theme} setTheme={setTheme} />
             </div>
             <textarea
               id="trip-idea"
-              className="mt-2 h-28 w-full resize-none rounded-lg border border-stone-200/80 bg-white px-3 py-2.5 text-sm leading-6 text-stone-700 outline-none ring-0 transition-all duration-200 placeholder:text-stone-400 focus:border-stone-400 dark:border-[#3a3630]/80 dark:bg-[#2a2724] dark:text-[#b5afa6] dark:placeholder:text-[#5e584f] dark:focus:border-[#5a554e]"
+              className="mt-2 h-28 w-full resize-none rounded-lg border border-stone-200/80 bg-white px-3 py-2.5 text-sm leading-6 text-stone-700 outline-none ring-0 transition-all duration-200 placeholder:text-stone-400 focus:border-stone-400     "
               value={idea}
               onChange={(event) => setIdea(event.target.value)}
               maxLength={2000}
               disabled={isGenerating}
             />
             {error ? (
-              <div className="mt-3 flex gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm leading-6 text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-400">
+              <div className="mt-3 flex gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm leading-6 text-red-700   ">
                 <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
                 <span>{error}</span>
               </div>
@@ -901,7 +726,7 @@ function App() {
               <LoadingProgress progress={generationProgress} stage={generationStages[generationStageIndex]} stages={generationStages} />
             ) : null}
             {hasAiContext ? (
-              <div className="mt-3 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-medium leading-5 text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-950/30 dark:text-emerald-300">
+              <div className="mt-3 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs font-medium leading-5 text-emerald-700   ">
                 已保留当前行程和最近沟通上下文，本轮输入会作为优化要求处理。点击清空行程后上下文会一并清除。
               </div>
             ) : null}
@@ -909,7 +734,7 @@ function App() {
               <button
                 type="submit"
                 disabled={isGenerating}
-                className="inline-flex flex-1 items-center justify-center gap-2 rounded-md bg-stone-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-stone-800 disabled:cursor-not-allowed disabled:bg-stone-500 dark:bg-[#e8e4df] dark:text-[#141210] dark:hover:bg-[#d8d4cf] dark:disabled:bg-[#3a3630] dark:disabled:text-[#7a746c]"
+                className="travel-primary-action inline-flex flex-1 items-center justify-center gap-2 rounded-md bg-stone-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-stone-800 disabled:cursor-not-allowed disabled:bg-stone-500     "
               >
                 {isGenerating ? '正在生成行程' : hasAiContext ? '优化当前行程' : '生成行程草案'}
                 {isGenerating ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
@@ -921,24 +746,24 @@ function App() {
                   aria-expanded={isAiDebugOpen}
                   aria-label={isAiDebugOpen ? '隐藏请求/响应详情' : '显示请求/响应详情'}
                   title={isAiDebugOpen ? '隐藏请求/响应详情' : '显示请求/响应详情'}
-                  className="inline-flex shrink-0 items-center justify-center rounded-md border border-stone-200 bg-white px-3 py-3 text-stone-600 transition hover:border-stone-300 hover:bg-stone-50 dark:border-[#3a3630] dark:bg-[#1e1c1a] dark:text-[#9a9389] dark:hover:border-[#5a554e] dark:hover:bg-[#2e2b26]"
+                  className="inline-flex shrink-0 items-center justify-center rounded-md border border-stone-200 bg-white px-3 py-3 text-stone-600 transition hover:border-stone-300 hover:bg-stone-50     "
                 >
                   <ChevronDown className={`h-4 w-4 transition ${isAiDebugOpen ? 'rotate-180' : ''}`} />
                 </button>
               ) : null}
             </div>
             {isAiDebugOpen && lastAiRequest ? (
-              <div className="mt-2 space-y-2 rounded-md border border-stone-200 bg-stone-50 p-3 text-xs dark:border-[#3a3630] dark:bg-[#1e1c1a]">
+              <div className="mt-2 space-y-2 rounded-md border border-stone-200 bg-stone-50 p-3 text-xs  ">
                 <div>
-                  <p className="mb-1 font-semibold text-stone-600 dark:text-[#9a9389]">发送给 DeepSeek 的内容</p>
-                  <pre className="max-h-40 overflow-auto rounded bg-white p-2 text-stone-700 dark:bg-[#252320] dark:text-[#b5afa6]">
+                  <p className="mb-1 font-semibold text-stone-600 ">发送给 DeepSeek 的内容</p>
+                  <pre className="max-h-40 overflow-auto rounded bg-white p-2 text-stone-700  ">
                     {JSON.stringify(lastAiRequest, null, 2)}
                   </pre>
                 </div>
                 {lastAiResponse ? (
                   <div>
-                    <p className="mb-1 font-semibold text-stone-600 dark:text-[#9a9389]">DeepSeek 返回的内容</p>
-                    <pre className="max-h-40 overflow-auto rounded bg-white p-2 text-stone-700 dark:bg-[#252320] dark:text-[#b5afa6]">
+                    <p className="mb-1 font-semibold text-stone-600 ">DeepSeek 返回的内容</p>
+                    <pre className="max-h-40 overflow-auto rounded bg-white p-2 text-stone-700  ">
                       {JSON.stringify(lastAiResponse, null, 2)}
                     </pre>
                   </div>
@@ -949,7 +774,7 @@ function App() {
               type="button"
               onClick={clearPlan}
               disabled={isGenerating}
-              className="mt-2 inline-flex w-full items-center justify-center rounded-lg border border-stone-200/80 bg-white/80 px-3 py-2 text-xs font-semibold text-stone-400 transition-all duration-200 hover:border-red-200 hover:bg-red-50/80 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-60 dark:border-[#3a3630]/80 dark:bg-[#1e1c1a]/80 dark:text-[#7a746c] dark:hover:border-red-900/50 dark:hover:bg-red-950/30 dark:hover:text-red-400"
+              className="mt-2 inline-flex w-full items-center justify-center rounded-lg border border-stone-200/80 bg-white/80 px-3 py-2 text-xs font-semibold text-stone-400 transition-all duration-200 hover:border-red-200 hover:bg-red-50/80 hover:text-red-600 disabled:cursor-not-allowed disabled:opacity-60      "
             >
               清空行程
             </button>
@@ -961,9 +786,6 @@ function App() {
           transport={plan.recommended_transport}
           dayCount={plannedDayCount}
           itemCount={itineraryItemCount}
-          packedCount={packedItemCount}
-          packingCount={packingItems.length}
-          onOpenPacking={scrollToPackingList}
         />
 
         <ItineraryBoard
@@ -1007,30 +829,7 @@ function App() {
           deleteCard={deleteCard}
         />
 
-        <div id="packing-list" ref={packingSectionRef} className="scroll-mt-5">
-          <PackingList
-            items={packingItems}
-            form={packingForm}
-            isCollapsed={isPackingCollapsed}
-            activeCategory={activePackingCategory}
-            searchQuery={packingSearchQuery}
-            onFormField={updatePackingForm}
-            onAddItem={addPackingItem}
-            onToggleCollapsed={() => setIsPackingCollapsed((isCollapsed) => !isCollapsed)}
-            onCategoryFilter={setActivePackingCategory}
-            onSearchQuery={setPackingSearchQuery}
-            onClearFilters={clearPackingFilters}
-            onToggleItem={togglePackingItem}
-            onDeleteItem={deletePackingItem}
-            onReorderItems={reorderPackingItems}
-            editingPackingId={editingPackingId}
-            editingPackingForm={editingPackingForm}
-            onStartEditPackingItem={startEditPackingItem}
-            onEditPackingField={updateEditingPackingForm}
-            onSavePackingItemEdit={savePackingItemEdit}
-            onCancelPackingItemEdit={cancelPackingItemEdit}
-          />
-        </div>
+
       </div>
     </main>
   );

@@ -15,10 +15,6 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-.dark body {
-  background: #141210;
-}
-
 button,
 textarea {
   font: inherit;
@@ -39,14 +35,6 @@ input[type="number"]:focus,
 input[type="date"]:focus,
 textarea:focus {
   box-shadow: 0 0 0 3px rgba(120, 113, 108, 0.08);
-}
-
-.dark select:focus,
-.dark input[type="text"]:focus,
-.dark input[type="number"]:focus,
-.dark input[type="date"]:focus,
-.dark textarea:focus {
-  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.06);
 }
 
 /* --- Animated gradient badge for AI tag --- */
@@ -73,12 +61,6 @@ textarea:focus {
   color: #0ea5e9;
   box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.25), 0 8px 18px rgba(120, 113, 108, 0.16);
   animation: travel-pulse 1.3s ease-in-out infinite;
-}
-
-.dark .travel-loader {
-  background: #2a2724;
-  color: #38bdf8;
-  box-shadow: 0 0 0 1px rgba(251, 191, 36, 0.2), 0 8px 18px rgba(0, 0, 0, 0.28);
 }
 
 .print-frame {
@@ -112,16 +94,6 @@ textarea:focus {
   background-size: 40px 40px, 40px 40px, 100% 100%, 100% 100%, 100% 100%, 100% 100%;
 }
 
-.dark .map-grid {
-  background-image:
-    linear-gradient(rgba(200, 180, 150, 0.03) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(200, 180, 150, 0.03) 1px, transparent 1px),
-    radial-gradient(circle at 15% 25%, rgba(56, 189, 248, 0.07), transparent 40%),
-    radial-gradient(circle at 85% 15%, rgba(251, 191, 36, 0.08), transparent 35%),
-    radial-gradient(circle at 50% 85%, rgba(52, 211, 153, 0.07), transparent 35%),
-    radial-gradient(circle at 65% 50%, rgba(168, 85, 247, 0.05), transparent 30%);
-}
-
 /* --- Scrollbar --- */
 ::-webkit-scrollbar {
   height: 8px;
@@ -140,19 +112,6 @@ textarea:focus {
 
 ::-webkit-scrollbar-track {
   background: rgba(255, 255, 255, 0.5);
-  border-radius: 999px;
-}
-
-.dark ::-webkit-scrollbar-thumb {
-  background: #4a453e;
-}
-
-.dark ::-webkit-scrollbar-thumb:hover {
-  background: #5a554e;
-}
-
-.dark ::-webkit-scrollbar-track {
-  background: rgba(30, 28, 26, 0.5);
   border-radius: 999px;
 }
 
@@ -182,13 +141,6 @@ textarea:focus {
 .card-glow-accent-amber::after { box-shadow: 0 0 20px rgba(245, 158, 11, 0.15), 0 0 40px rgba(245, 158, 11, 0.05); }
 .card-glow-accent-violet::after { box-shadow: 0 0 20px rgba(139, 92, 246, 0.15), 0 0 40px rgba(139, 92, 246, 0.05); }
 .card-glow-accent-rose::after { box-shadow: 0 0 20px rgba(244, 63, 94, 0.15), 0 0 40px rgba(244, 63, 94, 0.05); }
-
-.dark .card-glow-accent-sky::after { box-shadow: 0 0 24px rgba(14, 165, 233, 0.10), 0 0 48px rgba(14, 165, 233, 0.04); }
-.dark .card-glow-accent-emerald::after { box-shadow: 0 0 24px rgba(16, 185, 129, 0.10), 0 0 48px rgba(16, 185, 129, 0.04); }
-.dark .card-glow-accent-lime::after { box-shadow: 0 0 24px rgba(132, 204, 22, 0.10), 0 0 48px rgba(132, 204, 22, 0.04); }
-.dark .card-glow-accent-amber::after { box-shadow: 0 0 24px rgba(245, 158, 11, 0.10), 0 0 48px rgba(245, 158, 11, 0.04); }
-.dark .card-glow-accent-violet::after { box-shadow: 0 0 24px rgba(139, 92, 246, 0.10), 0 0 48px rgba(139, 92, 246, 0.04); }
-.dark .card-glow-accent-rose::after { box-shadow: 0 0 24px rgba(244, 63, 94, 0.10), 0 0 48px rgba(244, 63, 94, 0.04); }
 
 /* --- Stat card gradient icon ring --- */
 .stat-icon-ring {
@@ -247,9 +199,4 @@ textarea:focus {
   --empty-border-start: rgba(168, 162, 158, 0.25);
   --empty-border-end: rgba(168, 162, 158, 0.45);
   animation: empty-pulse 2.5s ease-in-out infinite;
-}
-
-.dark .empty-droppable {
-  --empty-border-start: rgba(74, 69, 62, 0.3);
-  --empty-border-end: rgba(74, 69, 62, 0.55);
 }

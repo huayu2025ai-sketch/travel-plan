@@ -73,14 +73,3 @@ describe('template to board flow', () => {
     await waitFor(() => expect(window.umami.track).toHaveBeenCalledExactlyOnceWith('export_success', { format: 'markdown' }));
   });
 });
-
-it('protects a saved packing-only plan from automatic replacement', () => {
-  localStorage.setItem(storageKey, JSON.stringify({
-    destination: '', start_date: '', recommended_transport: '待推荐', itinerary: { 'Day 1': [] },
-    packing_items: [{ id: 'personal', name: '个人清单物品', category: '其他', quantity: '1', packed: false }],
-  }));
-  render(<App />);
-  expect(screen.getByRole('region', { name: '载入模板' })).toBeTruthy();
-  expect(screen.getByText('个人清单物品')).toBeTruthy();
-  expect(window.umami.track).not.toHaveBeenCalled();
-});

@@ -5,14 +5,13 @@ import { preserveConcurrentPlanEdits } from '../../src/utils/plan-merge.js';
 import { getPlanWeather, updatePlanDayDate } from '../../src/utils/plan-weather.js';
 
 describe('concurrent itinerary edits', () => {
-  it('keeps manual itinerary and packing changes while accepting generated untouched fields', () => {
-    const base = { destination: '杭州', start_date: '2026-10-01', recommended_transport: '高铁', itinerary: { 'Day 1': [{ id: 'a' }] }, packing_items: [] };
-    const current = { ...base, itinerary: { 'Day 1': [{ id: 'a', title: '手动修改' }] }, packing_items: [{ id: 'p', name: '雨伞' }] };
+  it('keeps manual itinerary changes while accepting generated untouched fields', () => {
+    const base = { destination: '杭州', start_date: '2026-10-01', recommended_transport: '高铁', itinerary: { 'Day 1': [{ id: 'a' }] } };
+    const current = { ...base, itinerary: { 'Day 1': [{ id: 'a', title: '手动修改' }] } };
     const generated = { ...base, destination: '杭州', recommended_transport: '地铁', itinerary: { 'Day 1': [{ id: 'new' }] }, weather: { 'Day 1': '晴' } };
     const merged = preserveConcurrentPlanEdits(base, current, generated);
 
     expect(merged.itinerary).toEqual(current.itinerary);
-    expect(merged.packing_items).toEqual(current.packing_items);
     expect(merged.recommended_transport).toBe('地铁');
   });
 });

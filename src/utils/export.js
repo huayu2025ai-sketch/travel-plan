@@ -68,19 +68,5 @@ export function buildMarkdown(plan) {
     });
   });
 
-  lines.push('## 携带物品', '');
-
-  const packingItems = plan.packing_items || [];
-  if (packingItems.length === 0) {
-    lines.push('- 暂无携带物品记录', '');
-  } else {
-    packingItems.forEach((item) => {
-      const status = item.packed ? '已携带' : '待准备';
-      const detail = [item.category, item.quantity, item.note].filter(Boolean).join(' · ');
-      lines.push(`- [${item.packed ? 'x' : ' '}] ${item.name}（${status}${detail ? ` · ${detail}` : ''}）`);
-    });
-    lines.push('');
-  }
-
   return lines.join('\n');
 }

@@ -11,8 +11,5 @@ export function preserveConcurrentPlanEdits(basePlan, currentPlan, generatedPlan
     result.weather = {};
     result.weather_context = null;
   }
-  if (JSON.stringify(currentPlan.packing_items || []) !== JSON.stringify(basePlan.packing_items || [])) {
-    result.packing_items = currentPlan.packing_items;
-  }
   return result;
 }

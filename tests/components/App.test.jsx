@@ -25,17 +25,6 @@ describe('App key interactions', () => {
     vi.restoreAllMocks();
   });
 
-  it('scrolls to the packing list from the summary card and toggles an item', () => {
-    render(<App />);
-
-    fireEvent.click(screen.getByRole('button', { name: '查看携带物品清单' }));
-    expect(HTMLElement.prototype.scrollIntoView).toHaveBeenCalledWith({ behavior: 'smooth', block: 'start' });
-
-    const idCardButton = screen.getByRole('button', { name: '标记已携带 身份证' });
-    fireEvent.click(idCardButton);
-    expect(screen.getByRole('button', { name: '取消携带 身份证' })).toBeTruthy();
-  });
-
   it('adds a custom itinerary card to the selected day', () => {
     render(<App />);
 

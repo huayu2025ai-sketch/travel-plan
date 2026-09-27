@@ -33,8 +33,8 @@ export function getDateBadgeClass(dateInfo) {
   if (!dateInfo.displayText) return '';
 
   return dateInfo.dayType === 'weekend'
-    ? 'bg-amber-50 text-amber-700 ring-1 ring-amber-200 dark:bg-amber-950/30 dark:text-amber-300 dark:ring-amber-900/60'
-    : 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200 dark:bg-emerald-950/30 dark:text-emerald-300 dark:ring-emerald-900/60';
+    ? 'bg-amber-50 text-amber-700 ring-1 ring-amber-200   '
+    : 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200   ';
 }
 
 export function getDayDateInfo(startDate, day) {

@@ -97,11 +97,6 @@ export function createTemplatePlan(template) {
   return {
     destination: template.destination, start_date: '', weather: {},
     recommended_transport: template.transport,
-    packing_items: [
-      { id: 'template-id', name: '身份证件', category: '证件', quantity: '按人数', packed: false, note: '核对乘车与入住所需证件。' },
-      { id: 'template-shoes', name: '舒适步行鞋', category: '衣物', quantity: '1双', packed: false, note: '根据天气调整穿着。' },
-      { id: 'template-charger', name: '手机充电器', category: '电子', quantity: '1套', packed: false, note: '出发前检查电量。' },
-    ],
     itinerary: Object.fromEntries(template.days.map((day, index) => [
       `Day ${index + 1}`, day.items.map((item, itemIndex) => ({ ...item, id: `${template.slug}-${index}-${itemIndex}` })),
     ])),
