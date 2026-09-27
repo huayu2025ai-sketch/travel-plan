@@ -48,7 +48,11 @@ RUN printf '%s\n' \
   '        add_header Cache-Control "public, max-age=31536000, immutable";' \
   '    }' \
   '    location / {' \
-  '        try_files $uri $uri/ /index.html;' \
+  '        try_files $uri $uri/ =404;' \
+  '    }' \
+  '    error_page 404 /404.html;' \
+  '    location = /404.html {' \
+  '        internal;' \
   '    }' \
   '}' > /etc/nginx/conf.d/default.conf
 

@@ -8,6 +8,8 @@
 
 ## 功能特性
 
+- **公开首页与 SEO 内容** — 静态产品首页、6 个行程模板、3 篇使用教程及目录，包含独立标题、摘要、canonical、分享卡片、结构化数据与站点地图
+- **一键使用模板** — 模板直接载入 `/app/` 看板；保留原本地存储，已有个人行程时先提示替换；记录模板使用、生成成功、编辑与导出事件
 - **AI 行程生成** — 使用 DeepSeek V4.1 Flash（API 模型 ID：`deepseek-flash`）抽取目的地与出行日期并生成行程；先按日期匹配和风天气 7 天预报，预报无法覆盖完整行程或服务不可用时复用已解析坐标回退到 Open-Meteo，最终生成带预算、交通、每日安排与天气的行程
 - **上下文优化** — 生成后继续输入要求即可在原草案上调整；当前行程与最近 8 条沟通记录保存在浏览器本地（每次请求携带最近 6 条），点击「清空行程」一并清除
 - **拖拽看板** — 天数横向排序、卡片跨天拖拽、同天内重新排序；行李清单同样支持拖拽排序
@@ -72,7 +74,7 @@ npm run dev
 npm run client
 ```
 
-打开 http://localhost:3000
+打开 http://localhost:3000 浏览产品首页；http://localhost:3000/app/ 为原旅行看板。旧行程沿用原本地存储，无需迁移。
 
 开发模式下，Vite 会同时提供前端页面和 `/api/*` 接口，无需单独启动后端。
 
@@ -96,7 +98,8 @@ npm run client
 | `npm run dev` | 启动 Vite 开发服务器（含内置 API，别名） |
 | `npm run client` | 启动 Vite 开发服务器（含内置 API，端口 3000） |
 | `npm run server` | 独立启动 Express API 服务（默认端口 8787，可用 `API_PORT` 覆盖） |
-| `npm run build` | 构建生产版本到 `dist/` |
+| `npm run build` | 构建看板及 12 个公开静态页面到 `dist/` |
+| `npm run check:site` | 检查构建后的 SEO 元信息、内部链接和资源 |
 | `npm run preview` | 静态预览生产构建，**不包含 `/api`**（需要接口时另起 `npm run server`） |
 | `npm test` | 运行 Vitest 测试 |
 
@@ -152,7 +155,7 @@ npm test -- tests/server/deepseek.test.js   # 运行单个测试文件
 npm test -- --reporter=verbose              # 详细输出
 ```
 
-当前共 7 个测试文件、45 个用例，全部通过：
+测试覆盖 API、组件、行程工具及 SEO 静态页面；以 `npm test` 实际输出为准：
 
 | 文件 | 覆盖内容 |
 |------|----------|
@@ -163,6 +166,8 @@ npm test -- --reporter=verbose              # 详细输出
 | `tests/components/App.test.jsx` | 行李清单与自定义卡片关键交互 |
 | `tests/utils/plan.test.js` | 费用区间、按晚计价与未知费用汇总 |
 | `tests/utils/plan-merge.test.js` | 生成期间的手动修改保护与天气日期有效性 |
+| `tests/components/Templates.test.jsx` | 模板载入、旧行程保护、转化事件与导出取消 |
+| `tests/site/public-site.test.js` | 静态正文、canonical、站内链接、站点地图与模板数据 |
 
 框架为 Vitest v4 + `@testing-library/react`（组件测试用 jsdom 环境，服务端测试需在文件顶部声明 `// @vitest-environment node`），详见 `TESTING.md`。
 
@@ -238,7 +243,9 @@ npm run server
 
 ## 持续集成
 
-仓库已配置 `.github/workflows/test.yml`，推送到 `master` / `main` 或发起 pull request 时都会自动运行 `npm test`。当前 CI 尚未执行生产构建检查。
+仓库已配置 `.github/workflows/test.yml`，推送到 `master` / `main` 或发起 pull request 时会运行 `npm test`、`npm run build` 和 `npm run check:site`。
+
+公开站点、模板维护、统计事件与上线检查详见 [SEO.md](SEO.md)。正式域名为 https://travel-plan.solalab.cn/；上线后需在搜索站长平台验证域名并提交站点地图。
 
 ---
 

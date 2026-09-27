@@ -3,15 +3,20 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>AI 旅游规划看板</title>
+    <title>我的旅行行程表 | AI 旅行规划看板</title>
+    <meta name="description" content="生成和编辑你的每日旅行行程，拖拽调整、汇总预算，并导出图片、Markdown 或 JSON。" />
+    <meta name="robots" content="noindex,follow" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
     <script
       defer
       src="https://umami.solalab.cn/script.js"
       data-website-id="ff2418f5-f12a-480a-abad-ea176d5ed5b9"
+      data-domains="travel-plan.solalab.cn"
     ></script>
     <script>
       (function () {
-        var theme = localStorage.getItem('travel-plan-theme');
+        var theme;
+        try { theme = localStorage.getItem('travel-plan-theme'); } catch (_) {}
         if (theme === 'dark' || (!theme && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
           document.documentElement.classList.add('dark');
         }
@@ -19,6 +24,7 @@
     </script>
   </head>
   <body>
+    <noscript>旅行看板需要 JavaScript。你仍可<a href="/templates/">浏览完整行程模板</a>或<a href="/guides/">阅读使用指南</a>。</noscript>
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>

@@ -17,6 +17,9 @@ import {
 import { LoadingProgress, ThemeToggle } from './components/TravelControls.jsx';
 import { useTheme } from './hooks/useTheme.js';
 import { loadStoredConversation, loadStoredPlan } from './utils/storage.js';
+import { createTemplatePlan } from './content/templates.js';
+import { clearTemplateParameter, getTemplateStart } from './utils/template-start.js';
+import { trackProductEvent } from './utils/analytics.js';
 import { preserveConcurrentPlanEdits } from './utils/plan-merge.js';
 import { updatePlanDayDate } from './utils/plan-weather.js';
 import { buildMarkdown, saveBlobFile, saveTextFile } from './utils/export.js';
@@ -183,11 +186,22 @@ function compactPlanForAi(plan) {
 }
 
 function App() {
-  const [plan, setPlan] = useState(() => loadStoredPlan(initialTripPlan, normalizeImportedPlan));
+  const [templateStart] = useState(() => {
+    const storedPlan = loadStoredPlan(initialTripPlan, normalizeImportedPlan);
+    const hasPersonalContext = (storedPlan.packing_items?.length > 0 && !isInitialDemoPlan(storedPlan)) || loadStoredConversation().length > 0;
+    let hasStoredPlan = false;
+    try { hasStoredPlan = Boolean(window.localStorage.getItem(storageKey)); } catch { /* Storage may be unavailable. */ }
+    const canReplace = !hasStoredPlan || (!hasPersonalContext && (!hasPlanContent(storedPlan) || isInitialDemoPlan(storedPlan)));
+    return getTemplateStart(window.location.search, storedPlan, canReplace);
+  });
+  const [plan, setPlan] = useState(templateStart.plan);
+  const [pendingTemplate, setPendingTemplate] = useState(templateStart.applied ? null : templateStart.template);
+  const [templateNotice, setTemplateNotice] = useState(templateStart.applied ? `已载入「${templateStart.template.title}」，可以直接修改日期、费用和安排。` : '');
+  const templateTrackedRef = useRef(false);
   const planRef = useRef(plan);
-  const [idea, setIdea] = useState('我想去洛阳、开封旅游，在10月下旬，5天。预算大概多少，交通工具。');
+  const [idea, setIdea] = useState(templateStart.applied ? '' : '我想去洛阳、开封旅游，在10月下旬，5天。预算大概多少，交通工具。');
   const [isGenerating, setIsGenerating] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState(templateStart.invalid ? '没有找到这份模板，已保留当前行程。请从模板目录重新选择。' : '');
   const [cardForm, setCardForm] = useState(createEmptyCardForm('Day 1'));
   const [packingForm, setPackingForm] = useState(createEmptyPackingForm);
   const [editingPackingId, setEditingPackingId] = useState('');
@@ -203,7 +217,7 @@ function App() {
   const [activeTypes, setActiveTypes] = useState(typeOptions);
   const [activePackingCategory, setActivePackingCategory] = useState('全部');
   const [packingSearchQuery, setPackingSearchQuery] = useState('');
-  const [conversationHistory, setConversationHistory] = useState(loadStoredConversation);
+  const [conversationHistory, setConversationHistory] = useState(() => templateStart.applied ? [] : loadStoredConversation());
   const [generationProgress, setGenerationProgress] = useState(0);
   const [generationStageIndex, setGenerationStageIndex] = useState(0);
   const [lastAiRequest, setLastAiRequest] = useState(null);
@@ -230,6 +244,14 @@ function App() {
   }, {});
   const hasCurrentPlanContext = hasPlanContent(plan) && !isInitialDemoPlan(plan);
   const hasAiContext = hasCurrentPlanContext || conversationHistory.length > 0;
+
+  useEffect(() => {
+    if (templateStart.applied && !templateTrackedRef.current) {
+      templateTrackedRef.current = true;
+      trackProductEvent('template_use', { template: templateStart.template.slug });
+      clearTemplateParameter();
+    } else if (templateStart.invalid) clearTemplateParameter();
+  }, [templateStart]);
 
   useEffect(() => {
     try {
@@ -271,11 +293,37 @@ function App() {
     return () => window.clearInterval(interval);
   }, [isGenerating]);
 
-  const updatePlan = (updater) => {
+  const updatePlan = (updater, { trackEdit = true } = {}) => {
     const nextPlan = typeof updater === 'function' ? updater(planRef.current) : updater;
     planRevisionRef.current += 1;
     planRef.current = nextPlan;
     setPlan(nextPlan);
+    if (trackEdit) trackProductEvent('plan_edit');
+  };
+
+  const applyPendingTemplate = () => {
+    if (!pendingTemplate || isGenerating) return;
+    const nextPlan = normalizeImportedPlan(createTemplatePlan(pendingTemplate));
+    updatePlan(() => nextPlan, { trackEdit: false });
+    setConversationHistory([]);
+    setIdea('');
+    setError('');
+    setLastAiRequest(null);
+    setLastAiResponse(null);
+    setIsAiDebugOpen(false);
+    setEditingCardId('');
+    setPendingDeleteId('');
+    setEditingPackingId('');
+    setCardForm(createEmptyCardForm('Day 1'));
+    setPackingForm(createEmptyPackingForm());
+    setActiveTypes(typeOptions);
+    setActivePackingCategory('全部');
+    setPackingSearchQuery('');
+    setIsBoardCollapsed(false);
+    setTemplateNotice(`已载入「${pendingTemplate.title}」，可以直接修改日期、费用和安排。`);
+    trackProductEvent('template_use', { template: pendingTemplate.slug });
+    setPendingTemplate(null);
+    clearTemplateParameter();
   };
 
   const setItinerary = (nextItinerary) => {
@@ -425,7 +473,8 @@ function App() {
       const nextPlan = hasPlanChanged
         ? preserveConcurrentPlanEdits(planAtStart, planRef.current, generatedPlan)
         : generatedPlan;
-      updatePlan(() => nextPlan);
+      updatePlan(() => nextPlan, { trackEdit: false });
+      trackProductEvent('generate_success', { mode: hasCurrentPlanContext ? 'optimize' : 'create' });
       if (hasPlanChanged) {
         setError('生成已完成；期间的手动修改已保留。若要把新行程与这些修改合并，请基于当前看板再次优化。');
       }
@@ -476,7 +525,8 @@ function App() {
     }
 
     setIdea('');
-    updatePlan(() => emptyPlan);
+    updatePlan(() => emptyPlan, { trackEdit: false });
+    setTemplateNotice('');
     setCardForm(createEmptyCardForm('Day 1'));
     setPackingForm(createEmptyPackingForm());
     setEditingPackingId('');
@@ -711,34 +761,37 @@ function App() {
   };
 
   const exportPlan = async () => {
-    await saveTextFile(
+    const saved = await saveTextFile(
       JSON.stringify(currentPlanForExport, null, 2),
       `travel-plan-${new Date().toISOString().slice(0, 10)}.json`,
       'application/json;charset=utf-8',
       'JSON 文件',
       { 'application/json': ['.json'] },
     );
+    if (saved) trackProductEvent('export_success', { format: 'json' });
   };
 
   const exportMarkdown = async () => {
-    await saveTextFile(
+    const saved = await saveTextFile(
       buildMarkdown(currentPlanForExport),
       `travel-plan-${new Date().toISOString().slice(0, 10)}.md`,
       'text/markdown;charset=utf-8',
       'Markdown 文件',
       { 'text/markdown': ['.md'], 'text/plain': ['.txt'] },
     );
+    if (saved) trackProductEvent('export_success', { format: 'markdown' });
   };
 
   const exportImage = async () => {
     try {
       const blob = await buildPlanImageBlob(currentPlanForExport);
-      await saveBlobFile(
+      const saved = await saveBlobFile(
         blob,
         `travel-plan-${new Date().toISOString().slice(0, 10)}.png`,
         'PNG 图片',
         { 'image/png': ['.png'] },
       );
+      if (saved) trackProductEvent('export_success', { format: 'png' });
     } catch (imageError) {
       setError(imageError.message || '图片导出失败，请稍后重试。');
     }
@@ -746,7 +799,8 @@ function App() {
 
   const runExportAction = async (action) => {
     setIsExportMenuOpen(false);
-    await action();
+    try { await action(); }
+    catch (exportError) { setError(exportError.message || '导出失败，请稍后重试。'); }
   };
 
   const toggleTypeFilter = (type) => {
@@ -768,7 +822,7 @@ function App() {
     try {
       const content = await file.text();
       const importedPlan = normalizeImportedPlan(JSON.parse(content));
-      updatePlan(() => importedPlan);
+      updatePlan(() => importedPlan, { trackEdit: false });
       setCardForm(createEmptyCardForm(Object.keys(importedPlan.itinerary)[0]));
       setPackingForm(createEmptyPackingForm());
       setEditingPackingId('');
@@ -789,6 +843,21 @@ function App() {
     <main className="min-h-screen bg-[#f5f1e8] text-stone-900 transition-colors duration-400 dark:bg-[#141210] dark:text-[#e8e4df]">
       <div className="map-grid fixed inset-0 opacity-50" aria-hidden="true" />
       <div className="relative mx-auto flex min-h-screen max-w-[1680px] flex-col px-4 py-5 sm:px-6 lg:px-8">
+        <nav aria-label="主导航" className="mb-4 flex flex-wrap items-center justify-between gap-3 text-sm text-stone-700 dark:text-stone-300">
+          <a href="/" className="font-semibold">↗ 旅行规划看板</a>
+          <div className="flex gap-5"><a href="/templates/">行程模板</a><a href="/guides/">使用指南</a></div>
+        </nav>
+        {pendingTemplate && (
+          <section aria-label="载入模板" className="mb-4 rounded-xl border border-amber-300 bg-amber-50 p-5 text-sm text-stone-800 dark:bg-stone-900 dark:text-stone-200">
+            <h2 className="font-bold">当前浏览器已有行程</h2>
+            <p className="my-2">载入「{pendingTemplate.title}」会替换当前看板并清除 AI 沟通记录。请先通过下方导出菜单备份需要保留的行程。</p>
+            <div className="flex flex-wrap gap-3">
+              <button type="button" disabled={isGenerating} onClick={applyPendingTemplate} className="rounded-md bg-stone-800 px-4 py-2 text-white disabled:opacity-50">替换为这份模板</button>
+              <button type="button" onClick={() => { setPendingTemplate(null); clearTemplateParameter(); }} className="rounded-md border border-stone-400 px-4 py-2">保留当前行程</button>
+            </div>
+          </section>
+        )}
+        {templateNotice && <p role="status" className="mb-4 rounded-lg bg-emerald-50 p-3 text-sm text-emerald-900 dark:bg-emerald-950 dark:text-emerald-200">{templateNotice}</p>}
         <header className="animate-fade-up grid gap-5 rounded-2xl border border-stone-200/80 bg-white/85 p-5 shadow-soft backdrop-blur-lg transition-all duration-300 dark:border-[#3a3630]/80 dark:bg-[#1e1c1a]/85 dark:shadow-soft-dark md:grid-cols-[1.25fr_0.75fr] md:p-6">
           <div>
             <div className="flex flex-wrap items-center gap-2">
@@ -803,7 +872,7 @@ function App() {
               可调整的每日行程
             </h1>
             <p className="mt-3 max-w-3xl text-sm leading-6 text-stone-600 dark:text-[#9a9389] md:text-base">
-              输入旅行想法后生成结构化 JSON，也可以继续输入优化要求，AI 会带入当前草案上下文。
+              输入目的地、天数和预算，生成可拖拽修改的每日行程。继续说出你的偏好，AI 会在当前安排上优化；也可以直接编辑并导出图片。
             </p>
           </div>
 

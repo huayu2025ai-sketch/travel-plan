@@ -2,9 +2,10 @@ import 'dotenv/config';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 import { handleGenerateRequest, sendJson } from './server/generate-handler.js';
+import { publicSitePlugin } from './site/vite-plugin.js';
 
 export default defineConfig({
-  plugins: [react(), travelApiPlugin()],
+  plugins: [react(), travelApiPlugin(), publicSitePlugin()],
   server: {
     port: 3000,
     strictPort: true,

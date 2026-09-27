@@ -21,18 +21,19 @@ export async function saveBlobFile(blob, filename, description, accept) {
       const writable = await handle.createWritable();
       await writable.write(blob);
       await writable.close();
-      return;
+      return true;
     } catch (error) {
-      if (error.name === 'AbortError') return;
+      if (error.name === 'AbortError') return false;
       throw error;
     }
   }
 
   downloadBlobFile(blob, filename);
+  return true;
 }
 
 export async function saveTextFile(content, filename, type, description, accept) {
-  await saveBlobFile(new Blob([content], { type }), filename, description, accept);
+  return saveBlobFile(new Blob([content], { type }), filename, description, accept);
 }
 
 export function buildMarkdown(plan) {
