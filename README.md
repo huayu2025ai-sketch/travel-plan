@@ -113,14 +113,16 @@ travel-plan/
 ├── index.html             # 看板 HTML 入口
 ├── src/
 │   ├── main.jsx           # 浏览器挂载入口
-│   ├── App.jsx            # 应用编排、状态与导入导出交互（含 PNG 导出绘制）
+│   ├── App.jsx            # 应用编排、状态与导入导出交互
 │   ├── components/
 │   │   ├── ItineraryBoard.jsx       # 行程看板、筛选与编辑表单
 │   │   ├── ItineraryComponents.jsx  # 行程卡片、天数列 UI
 │   │   ├── PlanSummary.jsx          # 预算、交通与行程摘要
 │   │   ├── PlanExportMenu.jsx       # JSON / Markdown / 图片导出菜单
 │   │   └── TravelControls.jsx       # 生成进度组件
-│   ├── utils/             # 日期、预算、行程归一化、天气有效性、并发编辑合并、图片与文件导出
+│   ├── content/           # 行程模板与教程数据（templates.js / guides.js）
+│   ├── utils/             # 日期、预算、行程归一化、天气有效性、并发编辑合并、图片与文件导出、模板载入与统计埋点
+│   ├── app-theme.css      # 看板浅色主题（与公开站点视觉统一）
 │   └── styles.css         # 全局样式与 Tailwind 指令
 ├── server/
 │   ├── index.js           # Express 独立后端入口
@@ -138,6 +140,10 @@ travel-plan/
 ├── vitest.config.js       # Vitest 配置
 ├── tailwind.config.js     # Tailwind CSS 配置
 ├── vercel.json            # Vercel 部署配置
+├── site/                  # 公开站点构建：静态页渲染器、分享卡片与 Vite 插件
+├── scripts/               # build-site.js 生成静态页面，check-site.js 上线检查
+├── public/                # 站点静态资源（favicon、分享卡片、site.css）
+├── SEO.md                 # 公开站点、模板与 SEO 维护说明
 ├── run.sh                 # 开发服务器 start/stop/restart/status 脚本
 ├── package.json
 └── .env.example           # 环境变量模板
