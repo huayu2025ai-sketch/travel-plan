@@ -163,7 +163,13 @@ docker compose version >/dev/null 2>&1 || die "服务器上没有 docker compose
 grep -q '^DEEPSEEK_API_KEY=..*' "$ROOT/.env" || die ".env 缺少 DEEPSEEK_API_KEY"
 
 if [ "$PULL" = 1 ]; then
+  script_sum="$(md5sum "$0" 2>/dev/null | cut -d" " -f1 || true)"
   git pull --ff-only || die "git pull 失败：服务器工作区改动与远端冲突，请人工处理后重试"
+  # pull 更新了 deploy.sh 自身时，旧代码可能已在运行中；re-exec 保证全程跑的是最新逻辑
+  if [ -n "$script_sum" ] && [ "$(md5sum "$0" 2>/dev/null | cut -d" " -f1)" != "$script_sum" ]; then
+    echo "  ↻ deploy.sh 已被更新，重启执行最新版本"
+    exec bash "$0" "$@"
+  fi
 fi
 if ! git diff --quiet; then
   echo "  ⚠️ 服务器工作区有未提交改动（若涉及 Dockerfile/compose 请确认是有意覆盖）"
