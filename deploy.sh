@@ -37,7 +37,8 @@ PUBLIC_URL="https://travel-plan.solalab.cn"
 RETENTION_SECONDS=$((24 * 3600))        # 旧容器留存窗口，窗口内绝不删除
 
 # 预验证内容标记（站点改版换了标题时同步这里）
-MARKER_HOME="我的旅行行程表"
+MARKER_HOME="AI 旅行规划与行程表制作工具"   # SEO 首页（构建生成）
+MARKER_APP="我的旅行行程表"                 # 看板应用页 /app/
 MARKER_TPL_INDEX="旅行行程模板"
 TPL_PAGE="/templates/chengdu-2-days/"
 MARKER_TPL_PAGE="成都慢节奏两日游"
@@ -237,6 +238,8 @@ API_URL="http://127.0.0.1:${CAND_API_PORT}"
 
 gate "前端首页 200"                              gate_status "$CAND_URL/"
 gate "首页内容正确（含「$MARKER_HOME」）"          has_marker "$CAND_URL/" "$MARKER_HOME"
+gate "看板应用页 /app/ 200"                       gate_status "$CAND_URL/app/"
+gate "看板页内容（含「$MARKER_APP」）"             has_marker "$CAND_URL/app/" "$MARKER_APP"
 gate "模板列表页 200"                             gate_status "$CAND_URL/templates/"
 gate "模板列表页内容（含「$MARKER_TPL_INDEX」）"   has_marker "$CAND_URL/templates/" "$MARKER_TPL_INDEX"
 gate "模板详情页 $TPL_PAGE 200"                   gate_status "$CAND_URL$TPL_PAGE"

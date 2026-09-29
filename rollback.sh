@@ -27,7 +27,7 @@ CAND_API="travel-plan-api-candidate"
 NPM_NETWORK="${NPM_NETWORK_NAME:-npm-network}"
 CAND_NET="travel-plan-cand-net"
 PUBLIC_URL="https://travel-plan.solalab.cn"
-MARKER_HOME="我的旅行行程表"
+MARKER_HOME="AI 旅行规划与行程表制作工具"
 
 die()  { echo "❌ $*" >&2; exit 1; }
 step() { echo; echo "==> $*"; }

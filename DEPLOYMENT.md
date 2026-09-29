@@ -124,7 +124,7 @@ ssh root@huoshan "cd /opt/git/travel-plan && ./rollback.sh"
 
 ### 预验证闸门（11 条）
 
-首页 200 + 标题「我的旅行行程表」→ 模板列表页 200 + 标记 → 成都模板页 200 + 标记 → `sitemap.xml` 200 + 含域名 → API 直连 `ok:true` → `hasDeepSeekKey:true` → 前端→API 全链路 `ok:true`。内容标记定义在脚本头部配置区，站点改版换标题时同步。
+首页 200 + 标题「AI 旅行规划与行程表制作工具」→ 看板页 `/app/` 200 + 标题「我的旅行行程表」→ 模板列表页 200 + 标记 → 成都模板页 200 + 标记 → `sitemap.xml` 200 + 含域名 → API 直连 `ok:true` → `hasDeepSeekKey:true` → 前端→API 全链路 `ok:true`。内容标记定义在脚本头部配置区，站点改版换标题时同步（SEO 首页标题以 `dist/index.html` 构建产物为准，不是源码 `index.html`）。
 
 ### 失败行为
 
