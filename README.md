@@ -144,6 +144,9 @@ travel-plan/
 ├── scripts/               # build-site.js 生成静态页面，check-site.js 上线检查
 ├── public/                # 站点静态资源（favicon、分享卡片、site.css）
 ├── SEO.md                 # 公开站点、模板与 SEO 维护说明
+├── DEPLOYMENT.md          # 线上部署规范：预验证 + 秒回滚
+├── deploy.sh              # 线上部署脚本（构建 → 隔离预验证 → 原子切流 → 失败自动回滚）
+├── rollback.sh            # 线上秒回滚脚本
 ├── run.sh                 # 开发服务器 start/stop/restart/status 脚本
 ├── package.json
 └── .env.example           # 环境变量模板

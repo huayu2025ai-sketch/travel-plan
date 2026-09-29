@@ -128,6 +128,7 @@ The limiter is intentionally dependency-free and process-local. In a multi-insta
 
 ## Deployment notes
 
+- **Production deploys and rollbacks use the repo-root `deploy.sh` / `rollback.sh` on the server — see `DEPLOYMENT.md` for the spec.** Flow: build timestamped images → start candidate containers on an isolated network (ports bound to `127.0.0.1`) → pre-verify gates → atomic cutover with old containers renamed and retained for 24h → public re-check; failed cutovers auto-rollback. Do NOT run `docker compose down` / `up` against the live containers anymore (`docker compose build` is still used by the script). Deploy from the server repo at `/opt/git/travel-plan`, which pulls from Gitee — push both remotes locally.
 - Docker (recommended for production): the root `Dockerfile` builds the Vite frontend and serves it with Nginx; Nginx proxies `/api/` to the `travel-plan-api` Node container on port `8787`. `server/Dockerfile` runs the API container. `docker-compose.yml` attaches both services to the external `npm-network` and does not publish application ports to the host.
 - Nginx Proxy Manager must join the same external network and proxy to `travel-plan:80`. The frontend Nginx preserves the upstream client address headers used by the API rate limiter.
 - Required Docker environment: `DEEPSEEK_API_KEY`. Optional weather variables are `QWEATHER_API_KEY`, `QWEATHER_BASE_URL`, and `QWEATHER_GEO_URL`; without the key, weather falls back to Open-Meteo.

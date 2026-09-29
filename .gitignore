@@ -5,3 +5,5 @@ dist
 .env.local
 .run.log
 .run.pid
+.deploy.lock
+.rollback.lock
