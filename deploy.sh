@@ -108,8 +108,10 @@ on_err() {
   local need_rollback=0
   if [ "$PHASE" = "verify" ]; then
     need_rollback=1                       # 新版已上线但复验失败 → 必须回滚
+  elif [ "$PHASE" = "cutover" ] && [ -n "$OLD_SUFFIX" ]; then
+    need_rollback=1                       # 旧容器已改名 = 切流已开始，此后任何失败都回滚
   elif [ "$PHASE" = "cutover" ] && ! container_running "$WEB_CONTAINER"; then
-    need_rollback=1                       # 切流中途断档且旧版未在跑 → 回滚
+    need_rollback=1                       # 首次部署（无旧容器）切流断档 → 只能报错
   fi
   if [ "$need_rollback" = 1 ]; then
     if [ -n "$OLD_SUFFIX" ] && container_exists "${OLD_WEB_PREFIX}${OLD_SUFFIX}"; then
