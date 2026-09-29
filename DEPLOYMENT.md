@@ -87,11 +87,11 @@ docker exec <npm容器> nginx -s reload      # 别忘了
 
 | 站点 | 形态 | Step 3 验证内容 | 特殊注意 |
 |---|---|---|---|
-| travel-plan | **双容器**：前端 Nginx + Node API（8787），无 DB | `/`、`/templates/`、模板页 200 + 标题标记；`/sitemap.xml` 含域名；`/api/health` 的 `ok` 与 `hasDeepSeekKey` | ✅ 已落地脚本；前端按容器名反代 API，candidate 需隔离网 + 别名（见 Step 2） |
+| travel-plan | **双容器**：前端 Nginx + Node API（8787），无 DB | `/`、`/app/`、`/templates/`、模板页 200 + 标题标记；`/sitemap.xml` 含域名；`/api/health` 的 `ok` 与 `hasDeepSeekKey` | ✅ 已落地脚本（2026-09-29 首跑 + 回滚演练通过）；前端按容器名反代 API，candidate 需隔离网 + 别名（见 Step 2） |
 | flexi-log-web | 容器 3000 | `/` 200 + 标题；`/sitemap.xml`；DB 连通冒烟 | compose 已有 healthcheck 可复用 |
-| china-travel | 前端 + FastAPI 后端双容器 | 前端 `/` 200；后端 `/api/health` 200 | 有 Alembic，见第五节 |
+| china-travel | 前端 Next.js + FastAPI 后端双容器，外置 PostgreSQL（`pg_main`） | 前端 `/` 200 + 标题；后端 `/health`；**DB 真查** `/api/v1/map/provinces` | ✅ 已落地脚本；有 Alembic——迁移显式前置 + 迁移前 pg_dump，见其仓库 DEPLOYMENT.md |
 
-实施顺序（风险从低到高）：**travel-plan（✅ 2026-09-29）→ flexi-log-web → china-travel**。后续可选：挂 gitee webhook 自动触发 deploy.sh，流程不变。
+实施顺序（风险从低到高）：**travel-plan（✅）→ china-travel（✅）→ flexi-log-web（待做）**。后续可选：挂 gitee webhook 自动触发 deploy.sh，流程不变。
 
 ---
 
