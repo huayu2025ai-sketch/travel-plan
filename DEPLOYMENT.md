@@ -168,3 +168,76 @@ docker exec <pg容器> pg_dump -U <user> <db> > backup_$(date +%Y%m%d-%H%M).sql
 - ❌ 不用 `latest` tag 部署
 - ❌ 旧容器/旧镜像在回滚窗口（24h）内不得 `docker rm` / `docker rmi`
 - ❌ 未经 Step 3 验证的容器不得接入 `npm-network`
+
+---
+
+## 附录：纯手工兜底流程（travel-plan，脚本不可用时）
+
+> 日常部署一律用仓库根脚本（见第四节）；以下仅当脚本不可用时按序手敲。两条铁律同前：验证在切流之前；切流可逆。
+
+```bash
+ssh root@huoshan
+cd /opt/git/travel-plan
+
+# 1) 更新代码，确定版本号
+git pull --ff-only
+TAG="$(TZ=Asia/Shanghai date +%Y%m%d)-$(git rev-parse --short HEAD)"
+
+# 2) 构建带版本 tag 镜像（禁止 latest）
+IMAGE_TAG="$TAG" docker compose build
+
+# 3) 起隔离网 + candidate（端口只绑 127.0.0.1，不挂 npm-network = 不接流量）
+docker network inspect travel-plan-cand-net >/dev/null 2>&1 || docker network create travel-plan-cand-net
+docker run -d --name travel-plan-api-candidate \
+  --network travel-plan-cand-net --network-alias travel-plan-api \
+  -p 127.0.0.1:8788:8787 --env-file .env \
+  -e NODE_ENV=production -e API_PORT=8787 -e TZ=Asia/Shanghai -e TRUST_PROXY=1 \
+  "travel-plan-api:$TAG"
+docker run -d --name travel-plan-candidate \
+  --network travel-plan-cand-net -p 127.0.0.1:3001:80 "travel-plan:$TAG"
+
+# 4) 预验证：全过才许继续；任何一条不过 → docker rm -f 两个 candidate 收工
+curl -sf http://127.0.0.1:3001/ | grep -q "AI 旅行规划与行程表制作工具"
+curl -sf http://127.0.0.1:3001/app/ | grep -q "我的旅行行程表"
+curl -sf http://127.0.0.1:3001/templates/ -o /dev/null
+curl -s  http://127.0.0.1:3001/sitemap.xml | grep -q "travel-plan.solalab.cn"
+curl -s  http://127.0.0.1:3001/api/health   # 人工确认 ok:true 且 hasDeepSeekKey:true
+
+# 5) 原子切流：旧容器按当前镜像版本改名留存，candidate 顶上（API 先）
+OLD_TAG=20260929-f9cf2a5   # 改成 docker ps 里看到的当前线上版本
+docker stop travel-plan-api travel-plan
+docker rename travel-plan-api travel-plan-api-old-$OLD_TAG
+docker rename travel-plan     travel-plan-old-$OLD_TAG
+docker stop travel-plan-api-candidate travel-plan-candidate
+docker rename travel-plan-api-candidate travel-plan-api
+docker network disconnect travel-plan-cand-net travel-plan-api
+docker network connect npm-network travel-plan-api
+docker start travel-plan-api
+docker rename travel-plan-candidate travel-plan
+docker network disconnect travel-plan-cand-net travel-plan
+docker network connect npm-network travel-plan
+docker start travel-plan
+docker exec npm-app-1 nginx -s reload          # ⚠️ 必做，否则公网 502
+
+# 6) 公网复验
+curl -s https://travel-plan.solalab.cn/ | grep -q "AI 旅行规划与行程表制作工具" && echo OK
+curl -s https://travel-plan.solalab.cn/api/health
+```
+
+手工回滚（只删失败的新版本，`-old-*` 绝不删；回滚后同样要 reload NPM）：
+
+```bash
+docker stop travel-plan-api travel-plan && docker rm travel-plan-api travel-plan
+docker rename travel-plan-api-old-$TAG travel-plan-api && docker start travel-plan-api
+docker rename travel-plan-old-$TAG travel-plan && docker start travel-plan
+docker exec npm-app-1 nginx -s reload
+```
+
+### 手工操作易漏清单
+
+1. push 双远端——只推 GitHub，服务器拉不到新代码
+2. reload NPM——切流和回滚之后都要，不做公网 502
+3. 镜像 tag 带短哈希，别用 latest
+4. 24h 留存窗口内不删 `-old-*` 容器、不 `rmi` 带 tag 镜像
+5. 禁 `docker compose down/up` 管线上容器（`compose build` 可以）
+6. 预验证没过的 candidate 不得接入 `npm-network`
