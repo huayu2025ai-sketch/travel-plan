@@ -1,7 +1,7 @@
 # Sola Lab 线上部署规范：预验证 + 秒回滚
 
 > **适用**：火山北京机（4C8G）上 Docker 部署的三个 Web App：`travel-plan` / `flexi-log-web`（fitness.solalab.cn）/ `china-travel`（travel.solalab.cn）
-> **状态**：✅ 2026-09-28 与华哥对齐的方案，本文档即实施记录。travel-plan 已落地为仓库根的 `deploy.sh` / `rollback.sh`；flexi-log-web 与 china-travel 按第四节顺序跟进。
+> **状态**：✅ 2026-09-28 与华哥对齐的方案，本文档即实施记录。三站均已落地为各自仓库根的 `deploy.sh` / `rollback.sh`（各站差异见第三节与其仓库 DEPLOYMENT.md）。
 > **背景**：频繁更新不能影响线上稳定。结论 = 不上腾讯测试机，用「预验证 + 回滚」流程替代。
 
 ---
@@ -88,10 +88,10 @@ docker exec <npm容器> nginx -s reload      # 别忘了
 | 站点 | 形态 | Step 3 验证内容 | 特殊注意 |
 |---|---|---|---|
 | travel-plan | **双容器**：前端 Nginx + Node API（8787），无 DB | `/`、`/app/`、`/templates/`、模板页 200 + 标题标记；`/sitemap.xml` 含域名；`/api/health` 的 `ok` 与 `hasDeepSeekKey` | ✅ 已落地脚本（2026-09-29 首跑 + 回滚演练通过）；前端按容器名反代 API，candidate 需隔离网 + 别名（见 Step 2） |
-| flexi-log-web | 容器 3000 | `/` 200 + 标题；`/sitemap.xml`；DB 连通冒烟 | compose 已有 healthcheck 可复用 |
+| flexi-log-web | 单容器 Next.js standalone（3000），外置 PostgreSQL（`pg_main` 的 `flexilog` 库） | `/` 200 + 标题；`/sitemap.xml` 含域名；**DB 冒烟** = 假登录探测 `/api/auth/login` 期待 401 | ✅ 已落地脚本（candidate 端口 3003）；迁移是首次查询懒执行的版本化 SQL（`lib/local-db.ts`，旧说"无迁移机制"已过时）——备份前置到 candidate 之前，迁移闸门后置到 DB 冒烟，见其仓库 DEPLOYMENT.md |
 | china-travel | 前端 Next.js + FastAPI 后端双容器，外置 PostgreSQL（`pg_main`） | 前端 `/` 200 + 标题；后端 `/health`；**DB 真查** `/api/v1/map/provinces` | ✅ 已落地脚本；有 Alembic——迁移显式前置 + 迁移前 pg_dump，见其仓库 DEPLOYMENT.md |
 
-实施顺序（风险从低到高）：**travel-plan（✅）→ china-travel（✅）→ flexi-log-web（待做）**。后续可选：挂 gitee webhook 自动触发 deploy.sh，流程不变。
+实施顺序（风险从低到高）：**travel-plan（✅）→ china-travel（✅）→ flexi-log-web（✅）**，三站脚本均已落地。后续可选：挂 gitee webhook 自动触发 deploy.sh，流程不变。
 
 ---
 
@@ -152,7 +152,7 @@ ssh root@huoshan "cd /opt/git/travel-plan && ./rollback.sh"
 docker exec <pg容器> pg_dump -U <user> <db> > backup_$(date +%Y%m%d-%H%M).sql
 ```
 
-迁移失败的恢复路径 = 恢复备份 + 回滚容器，两件事都要在脚本里体现。flexi-log-web / travel-plan 无迁移机制，发布不触碰 schema。
+迁移失败的恢复路径 = 恢复备份 + 回滚容器，两件事都要在脚本里体现。flexi-log-web 的迁移是首次查询懒执行的版本化 SQL（备份前置 + DB 冒烟闸门兜住，见其仓库 DEPLOYMENT.md）；travel-plan 无迁移机制，发布不触碰 schema。
 
 ## 六、本流程不解决的（边界，勿误判为脚本 bug）
 
