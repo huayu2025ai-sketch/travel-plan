@@ -33,24 +33,26 @@ tag 格式 **`YYYYMMDD-<短哈希>`**（如 `20260929-abc1234`，北京时间）
 ### Step 2：起新容器（并行，不接流量）
 
 ```bash
-docker run -d --name <项目>-candidate -p 127.0.0.1:3001:<容器内端口> <镜像>:<TAG>
+docker run -d --name <项目>-candidate --network <隔离网> <镜像>:<TAG>
 ```
 
-- candidate 端口**只绑 `127.0.0.1`**，公网摸不到；旧容器照常服务，切换期间用户无感知。
+- candidate **不发布宿主机端口**，公网摸不到；旧容器照常服务，切换期间用户无感知。
+- ⚠️ **不要给 candidate 加 `-p` 端口绑定**：Step 4 切流用 `rename` 直接晋升 candidate，`-p` 绑定会跟着容器进生产并长期占用，**第二次部署的 candidate 就无端口可用**（travel-plan 实际踩中）。预验证一律 `docker exec` 进容器内探测（见 Step 3）——生产流量本就走 npm-network（无宿主端口），容器内路径反而更真实。
 - **隔离机制**：流量入口是 Nginx Proxy Manager（NPM）所在的 `npm-network`，candidate 不挂该网络 = 天然不接流量。
 - **多容器项目**（前端按容器名反代后端，如 travel-plan 的 `proxy_pass http://travel-plan-api:8787`）：另建专用隔离网（如 `travel-plan-cand-net`），candidate 全挂上去，并给后端 candidate 加 `--network-alias <生产后端容器名>`。这样 candidate 前端的 proxy_pass 会解析到「新后端」，实现新栈全链路预验证；别名只在隔离网内生效，不与生产容器冲突。
 
 ### Step 3：预验证（闸门，任何一条挂 = 放弃本次发布）
 
 ```bash
+# 从 candidate 容器内探测（busybox wget 对 4xx/5xx 返回非零，可当状态闸门）
 # 1) 存活
-curl -f http://127.0.0.1:3001/ || fail
+docker exec <项目>-candidate wget -q -O /dev/null http://127.0.0.1/ || fail
 # 2) 内容正确性（不是只看 200，要抽查关键内容标记）
-curl -s http://127.0.0.1:3001/ | grep -q "关键标题/文案" || fail
+docker exec <项目>-candidate wget -qO- http://127.0.0.1/ | grep -q "关键标题/文案" || fail
 # 3) SEO 资产（有公开站的查）
-curl -s http://127.0.0.1:3001/sitemap.xml | grep -q "<正式域名>" || fail
+docker exec <项目>-candidate wget -qO- http://127.0.0.1/sitemap.xml | grep -q "<正式域名>" || fail
 # 4) 后端连通 + 配置完整（有后端的必查；health 返回里带密钥标志的连配置错误一起兜住）
-curl -s http://127.0.0.1:3001/api/health | grep -q '"ok":true' || fail
+docker exec <项目>-candidate wget -qO- http://127.0.0.1/api/health | grep -q '"ok":true' || fail
 ```
 
 `fail()` 行为：打印失败项 + 「发布中止，线上仍是旧版本」+ 清理 candidate 容器 + 退出码非 0。
@@ -87,7 +89,7 @@ docker exec <npm容器> nginx -s reload      # 别忘了
 
 | 站点 | 形态 | Step 3 验证内容 | 特殊注意 |
 |---|---|---|---|
-| travel-plan | **双容器**：前端 Nginx + Node API（8787），无 DB | `/`、`/app/`、`/templates/`、模板页 200 + 标题标记；`/sitemap.xml` 含域名；`/api/health` 的 `ok` 与 `hasDeepSeekKey` | ✅ 已落地脚本（2026-09-29 首跑 + 回滚演练通过）；前端按容器名反代 API，candidate 需隔离网 + 别名（见 Step 2） |
+| travel-plan | **双容器**：前端 Nginx + Node API（8787），无 DB | `/`、`/app/`、`/templates/`、模板页 200 + 标题标记；`/sitemap.xml` 含域名；`/api/health` 的 `ok` 与 `hasDeepSeekKey` | ✅ 已落地脚本（2026-09-29 首跑 + 回滚演练通过；2026-09-30 起预验证改容器内探测）；前端按容器名反代 API，candidate 需隔离网 + 别名；candidate **无宿主端口**（见 Step 2 ⚠️） |
 | flexi-log-web | 单容器 Next.js standalone（3000），外置 PostgreSQL（`pg_main` 的 `flexilog` 库） | `/` 200 + 标题；`/sitemap.xml` 含域名；**DB 冒烟** = 假登录探测 `/api/auth/login` 期待 401 | ✅ 已落地脚本（candidate 端口 3003）；迁移是首次查询懒执行的版本化 SQL（`lib/local-db.ts`，旧说"无迁移机制"已过时）——备份前置到 candidate 之前，迁移闸门后置到 DB 冒烟，见其仓库 DEPLOYMENT.md |
 | china-travel | 前端 Next.js + FastAPI 后端双容器，外置 PostgreSQL（`pg_main`） | 前端 `/` 200 + 标题；后端 `/health`；**DB 真查** `/api/v1/map/provinces` | ✅ 已落地脚本；有 Alembic——迁移显式前置 + 迁移前 pg_dump，见其仓库 DEPLOYMENT.md |
 
@@ -117,14 +119,14 @@ ssh root@huoshan "cd /opt/git/travel-plan && ./rollback.sh"
 | 项 | 值 |
 |---|---|
 | 容器 | `travel-plan`（前端 Nginx:80）、`travel-plan-api`（Node:8787） |
-| candidate | `travel-plan-candidate` / `travel-plan-api-candidate`，端口 `127.0.0.1:3001` / `127.0.0.1:8788`，隔离网 `travel-plan-cand-net` |
+| candidate | `travel-plan-candidate` / `travel-plan-api-candidate`，无宿主端口（预验证 `docker exec` 容器内探测），隔离网 `travel-plan-cand-net` |
 | 旧容器 | `travel-plan-old-<TAG>` / `travel-plan-api-old-<TAG>`，留存 24h |
 | 正式域名 | `https://travel-plan.solalab.cn` |
 | 镜像 tag | `YYYYMMDD-<短哈希>`，构建后同步进 `.env` 的 `IMAGE_TAG` |
 
-### 预验证闸门（11 条）
+### 预验证闸门（13 条）
 
-首页 200 + 标题「AI 旅行规划与行程表制作工具」→ 看板页 `/app/` 200 + 标题「我的旅行行程表」→ 模板列表页 200 + 标记 → 成都模板页 200 + 标记 → `sitemap.xml` 200 + 含域名 → API 直连 `ok:true` → `hasDeepSeekKey:true` → 前端→API 全链路 `ok:true`。内容标记定义在脚本头部配置区，站点改版换标题时同步（SEO 首页标题以 `dist/index.html` 构建产物为准，不是源码 `index.html`）。
+首页 200 + 标题「AI 旅行规划与行程表制作工具」→ 看板页 `/app/` 200 + 标题「我的旅行行程表」→ 模板列表页 200 + 标记 → 成都模板页 200 + 标记 → `sitemap.xml` 200 + 含域名 → API 直连 `ok:true` → `hasDeepSeekKey:true` → 前端→API 全链路 `ok:true`。所有探测均 `docker exec` 进 candidate 容器内发请求（candidate 无宿主端口，见总规范 Step 2 ⚠️）。内容标记定义在脚本头部配置区，站点改版换标题时同步（SEO 首页标题以 `dist/index.html` 构建产物为准，不是源码 `index.html`）。
 
 ### 失败行为
 
@@ -186,22 +188,23 @@ TAG="$(TZ=Asia/Shanghai date +%Y%m%d)-$(git rev-parse --short HEAD)"
 # 2) 构建带版本 tag 镜像（禁止 latest）
 IMAGE_TAG="$TAG" docker compose build
 
-# 3) 起隔离网 + candidate（端口只绑 127.0.0.1，不挂 npm-network = 不接流量）
+# 3) 起隔离网 + candidate（不发布宿主端口、不挂 npm-network = 不接流量；
+#    线上/留存容器可能占着 3001/8788 的历史绑定，宿主端口不可依赖）
 docker network inspect travel-plan-cand-net >/dev/null 2>&1 || docker network create travel-plan-cand-net
 docker run -d --name travel-plan-api-candidate \
   --network travel-plan-cand-net --network-alias travel-plan-api \
-  -p 127.0.0.1:8788:8787 --env-file .env \
+  --env-file .env \
   -e NODE_ENV=production -e API_PORT=8787 -e TZ=Asia/Shanghai -e TRUST_PROXY=1 \
   "travel-plan-api:$TAG"
 docker run -d --name travel-plan-candidate \
-  --network travel-plan-cand-net -p 127.0.0.1:3001:80 "travel-plan:$TAG"
+  --network travel-plan-cand-net "travel-plan:$TAG"
 
-# 4) 预验证：全过才许继续；任何一条不过 → docker rm -f 两个 candidate 收工
-curl -sf http://127.0.0.1:3001/ | grep -q "AI 旅行规划与行程表制作工具"
-curl -sf http://127.0.0.1:3001/app/ | grep -q "我的旅行行程表"
-curl -sf http://127.0.0.1:3001/templates/ -o /dev/null
-curl -s  http://127.0.0.1:3001/sitemap.xml | grep -q "travel-plan.solalab.cn"
-curl -s  http://127.0.0.1:3001/api/health   # 人工确认 ok:true 且 hasDeepSeekKey:true
+# 4) 预验证（docker exec 容器内探测）：全过才许继续；任何一条不过 → docker rm -f 两个 candidate 收工
+docker exec travel-plan-candidate wget -qO- http://127.0.0.1/ | grep -q "AI 旅行规划与行程表制作工具"
+docker exec travel-plan-candidate wget -qO- http://127.0.0.1/app/ | grep -q "我的旅行行程表"
+docker exec travel-plan-candidate wget -q -O /dev/null http://127.0.0.1/templates/
+docker exec travel-plan-candidate wget -qO- http://127.0.0.1/sitemap.xml | grep -q "travel-plan.solalab.cn"
+docker exec travel-plan-api-candidate wget -qO- http://127.0.0.1:8787/api/health  # 人工确认 ok:true 且 hasDeepSeekKey:true
 
 # 5) 原子切流：旧容器按当前镜像版本改名留存，candidate 顶上（API 先）
 OLD_TAG=20260929-f9cf2a5   # 改成 docker ps 里看到的当前线上版本

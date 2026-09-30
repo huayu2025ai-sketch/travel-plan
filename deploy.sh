@@ -13,6 +13,10 @@
 #    本脚本用 docker run/rename 管理，compose down/up 会与「旧容器改名留存」
 #    机制打架。docker compose build 仍由本脚本使用，无冲突。
 #
+# candidate 不发布宿主机端口：切流用 rename 晋升 candidate，-p 端口绑定会跟着
+# 容器进生产并长期占用，下一轮 candidate 就无端口可用。预验证一律 docker exec
+# 进容器内探测——生产流量本就走 npm-network（无宿主端口），容器内路径更真实。
+#
 # 失败行为：
 #   candidate 阶段失败 → 清理 candidate，线上零感知，仍是旧版本
 #   切流/复验阶段失败 → 自动调用 rollback.sh 回滚到留存旧容器
@@ -31,8 +35,6 @@ OLD_WEB_PREFIX="travel-plan-old-"       # 旧容器命名：travel-plan-old-<版
 OLD_API_PREFIX="travel-plan-api-old-"
 NPM_NETWORK="${NPM_NETWORK_NAME:-npm-network}"
 CAND_NET="travel-plan-cand-net"         # candidate 专用隔离网络，不接公网流量
-CAND_WEB_PORT=3001                      # candidate 预验证端口（仅绑定 127.0.0.1）
-CAND_API_PORT=8788
 PUBLIC_URL="https://travel-plan.solalab.cn"
 RETENTION_SECONDS=$((24 * 3600))        # 旧容器留存窗口，窗口内绝不删除
 
@@ -60,17 +62,23 @@ image_suffix() { # 容器正在运行的 image tag，如 20260929-abc1234
   img="$(docker inspect -f '{{.Config.Image}}' "$1")"
   printf '%s' "${img##*:}"
 }
-port_busy() { (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null; }
 
 # 取响应体再匹配，避免 `curl | grep -q` 在 pipefail 下因 SIGPIPE 产生假阴性
 http_body() { curl -sf --max-time 10 "$1" 2>/dev/null || true; }
 has_marker() { printf '%s' "$(http_body "$1")" | grep -q "$2"; }
 
-wait_http() { # <url> [最大秒数]
+# candidate 预验证从容器内发请求（两个镜像都含 busybox wget，切流后复验已在用）
+cand_web_body() { docker exec "$CAND_WEB" wget -q -T 10 -O - "$1" 2>/dev/null || true; }
+cand_api_body() { docker exec "$CAND_API" wget -q -T 10 -O - "$1" 2>/dev/null || true; }
+cand_web_ok()     { docker exec "$CAND_WEB" wget -q -T 10 -O /dev/null "$1" 2>/dev/null; }
+cand_marker_web() { printf '%s' "$(cand_web_body "$1")" | grep -q "$2"; }
+cand_marker_api() { printf '%s' "$(cand_api_body "$1")" | grep -q "$2"; }
+
+wait_in_container() { # <容器名> <容器内URL> [最大秒数]
   local i=0
-  until curl -sf --max-time 3 "$1" >/dev/null 2>&1; do
+  until docker exec "$1" wget -q -T 3 -O /dev/null "$2" 2>/dev/null; do
     i=$((i + 1))
-    [ "$i" -ge "${2:-30}" ] && return 1
+    [ "$i" -ge "${3:-30}" ] && return 1
     sleep 1
   done
 }
@@ -82,7 +90,6 @@ fail() {
   echo "🛑 发布中止，线上仍是旧版本。candidate 已清理。"
   exit 1
 }
-gate_status() { [ "$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "$1")" = "200" ]; }
 gate() { # <描述> <检查函数> <参数...>
   local desc="$1"
   shift
@@ -92,6 +99,8 @@ gate() { # <描述> <检查函数> <参数...>
     fail "预验证失败：$desc"
   fi
 }
+# 注：预验证不发布宿主端口，200 状态闸门用 cand_web_ok（busybox wget 对 4xx/5xx
+# 返回非零），内容闸门用 cand_marker_*，全部从 candidate 容器内发请求
 
 # 退出兜底：删除 candidate 容器与隔离网络（切流完成后两者已改名/解绑，此操作为无害空转）
 cleanup_candidates() {
@@ -208,56 +217,49 @@ sed -i "s/^IMAGE_TAG=.*/IMAGE_TAG=$TAG/" "$ROOT/.env"
 grep -q '^IMAGE_TAG=' "$ROOT/.env" || echo "IMAGE_TAG=$TAG" >> "$ROOT/.env"
 echo "  ✅ travel-plan:$TAG 与 travel-plan-api:$TAG 构建完成"
 
-# ---------- Step 3：隔离网络起 candidate（不接流量） ----------
+# ---------- Step 3：隔离网络起 candidate（不接流量、不占宿主机端口） ----------
 PHASE="candidate"
 step "[3/6] 启动 candidate（隔离网络，不接公网流量）"
-for port in "$CAND_WEB_PORT" "$CAND_API_PORT"; do
-  if port_busy "$port"; then
-    die "端口 $port 已被占用，先排查：ss -ltnp | grep $port"
-  fi
-done
-
 docker network inspect "$CAND_NET" >/dev/null 2>&1 || docker network create "$CAND_NET" >/dev/null
 
 # API candidate：挂在隔离网络并用别名 travel-plan-api，让 candidate 前端的
-# proxy_pass（按容器名解析）指向「新 API」，实现新栈全链路预验证
+# proxy_pass（按容器名解析）指向「新 API」，实现新栈全链路预验证。
+# 不带 -p：切流 rename 会把端口绑定带进生产，预验证走 docker exec 容器内探测
 docker run -d --name "$CAND_API" \
   --network "$CAND_NET" --network-alias "$API_CONTAINER" \
-  -p "127.0.0.1:${CAND_API_PORT}:8787" \
   --env-file "$ROOT/.env" \
   -e NODE_ENV=production -e API_PORT=8787 -e TZ=Asia/Shanghai -e TRUST_PROXY=1 \
   "travel-plan-api:$TAG" >/dev/null
-wait_http "http://127.0.0.1:${CAND_API_PORT}/api/health" 30 \
+wait_in_container "$CAND_API" "http://127.0.0.1:8787/api/health" 30 \
   || fail "API candidate 30 秒内未就绪（docker logs $CAND_API）"
 
 # 前端 candidate
 docker run -d --name "$CAND_WEB" \
   --network "$CAND_NET" \
-  -p "127.0.0.1:${CAND_WEB_PORT}:80" \
   "travel-plan:$TAG" >/dev/null
-wait_http "http://127.0.0.1:${CAND_WEB_PORT}/" 30 \
+wait_in_container "$CAND_WEB" "http://127.0.0.1/" 30 \
   || fail "前端 candidate 30 秒内未就绪（docker logs $CAND_WEB）"
-echo "  candidate 已启动：127.0.0.1:${CAND_WEB_PORT}（前端）/ 127.0.0.1:${CAND_API_PORT}（API）"
+echo "  candidate 已启动（隔离网内容器自检，不占宿主机端口）"
 
 # ---------- Step 4：预验证闸门 ----------
 step "[4/6] 预验证（任何一条失败 = 放弃本次发布）"
-CAND_URL="http://127.0.0.1:${CAND_WEB_PORT}"
-API_URL="http://127.0.0.1:${CAND_API_PORT}"
+WEB_URL="http://127.0.0.1"         # candidate 前端（容器内）
+API_URL="http://127.0.0.1:8787"    # candidate API（容器内）
 
-gate "前端首页 200"                              gate_status "$CAND_URL/"
-gate "首页内容正确（含「$MARKER_HOME」）"          has_marker "$CAND_URL/" "$MARKER_HOME"
-gate "看板应用页 /app/ 200"                       gate_status "$CAND_URL/app/"
-gate "看板页内容（含「$MARKER_APP」）"             has_marker "$CAND_URL/app/" "$MARKER_APP"
-gate "模板列表页 200"                             gate_status "$CAND_URL/templates/"
-gate "模板列表页内容（含「$MARKER_TPL_INDEX」）"   has_marker "$CAND_URL/templates/" "$MARKER_TPL_INDEX"
-gate "模板详情页 $TPL_PAGE 200"                   gate_status "$CAND_URL$TPL_PAGE"
-gate "模板详情页内容（含「$MARKER_TPL_PAGE」）"    has_marker "$CAND_URL$TPL_PAGE" "$MARKER_TPL_PAGE"
-gate "sitemap.xml 200"                            gate_status "$CAND_URL/sitemap.xml"
-gate "sitemap 含正式域名"                         has_marker "$CAND_URL/sitemap.xml" "$MARKER_SITEMAP"
-gate "API 健康（candidate 直连）"                 has_marker "$API_URL/api/health" '"ok":true'
-gate "API 密钥已注入（hasDeepSeekKey）"           has_marker "$API_URL/api/health" '"hasDeepSeekKey":true'
+gate "前端首页 200"                              cand_web_ok "$WEB_URL/"
+gate "首页内容正确（含「$MARKER_HOME」）"          cand_marker_web "$WEB_URL/" "$MARKER_HOME"
+gate "看板应用页 /app/ 200"                       cand_web_ok "$WEB_URL/app/"
+gate "看板页内容（含「$MARKER_APP」）"             cand_marker_web "$WEB_URL/app/" "$MARKER_APP"
+gate "模板列表页 200"                             cand_web_ok "$WEB_URL/templates/"
+gate "模板列表页内容（含「$MARKER_TPL_INDEX」）"   cand_marker_web "$WEB_URL/templates/" "$MARKER_TPL_INDEX"
+gate "模板详情页 $TPL_PAGE 200"                   cand_web_ok "$WEB_URL$TPL_PAGE"
+gate "模板详情页内容（含「$MARKER_TPL_PAGE」）"    cand_marker_web "$WEB_URL$TPL_PAGE" "$MARKER_TPL_PAGE"
+gate "sitemap.xml 200"                            cand_web_ok "$WEB_URL/sitemap.xml"
+gate "sitemap 含正式域名"                         cand_marker_web "$WEB_URL/sitemap.xml" "$MARKER_SITEMAP"
+gate "API 健康（candidate 直连）"                 cand_marker_api "$API_URL/api/health" '"ok":true'
+gate "API 密钥已注入（hasDeepSeekKey）"           cand_marker_api "$API_URL/api/health" '"hasDeepSeekKey":true'
 # 全链路：candidate 前端 → proxy_pass 按容器名 → 新 API candidate，等价验证线上链路
-gate "前端→API 全链路（新栈自洽）"                has_marker "$CAND_URL/api/health" '"ok":true'
+gate "前端→API 全链路（新栈自洽）"                cand_marker_web "$WEB_URL/api/health" '"ok":true'
 
 echo
 echo "  ✅ 预验证全部通过"
