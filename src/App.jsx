@@ -667,11 +667,11 @@ function App() {
 
   return (
     <main className="travel-app min-h-screen">
-      <div className="map-grid fixed inset-0 opacity-50" aria-hidden="true" />
       <div className="travel-app-frame relative mx-auto flex min-h-screen w-full flex-col px-4 py-5 sm:px-6 lg:px-8">
+        <a className="travel-skip-link" href="#travel-board">跳到行程看板</a>
         <nav aria-label="主导航" className="travel-app-nav mb-4 flex flex-wrap items-center justify-between gap-3 text-sm">
           <a href="/" className="font-semibold">↗ 旅行规划看板</a>
-          <div className="flex gap-5"><a href="/templates/">行程模板</a><a href="/guides/">使用指南</a></div>
+          <div className="flex gap-5"><a href="/templates/">行程模板</a><a href="/guides/">使用指南</a><span aria-current="page">我的看板</span></div>
         </nav>
         {pendingTemplate && (
           <section aria-label="载入模板" className="mb-4 rounded-xl border border-amber-300 bg-amber-50 p-5 text-sm text-stone-800  ">
@@ -702,7 +702,7 @@ function App() {
             </p>
           </div>
 
-          <form onSubmit={generatePlan} className="rounded-xl border border-stone-200/80 bg-[#fbfaf7]/90 p-3.5 backdrop-blur transition-all duration-300  ">
+          <form onSubmit={generatePlan} className="travel-prompt rounded-xl border border-stone-200/80 bg-[#fbfaf7]/90 p-3.5 backdrop-blur transition-all duration-300  ">
             <div className="flex items-center justify-between">
               <label htmlFor="trip-idea" className="text-sm font-semibold text-stone-800 ">
                 {hasAiContext ? '继续优化' : '旅行想法'}

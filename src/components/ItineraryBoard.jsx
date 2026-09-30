@@ -48,7 +48,7 @@ export function ItineraryBoard({
   deleteCard,
 }) {
   return (
-    <section className="travel-board animate-fade-up animate-fade-up-delay-2 mt-5 flex-1 overflow-hidden rounded-2xl border border-stone-200/80 bg-white/70 p-3 shadow-soft backdrop-blur transition-all duration-300   ">
+    <section id="travel-board" className="travel-board animate-fade-up animate-fade-up-delay-2 mt-5 flex-1 overflow-hidden rounded-2xl border border-stone-200/80 bg-white/70 p-3 shadow-soft backdrop-blur transition-all duration-300   ">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3 px-1">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-stone-400 ">Kanban Board</p>
@@ -66,7 +66,7 @@ export function ItineraryBoard({
             </button>
           </div>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="travel-board-actions flex flex-wrap items-center gap-2">
           <button
             type="button"
             onClick={addDay}
@@ -75,10 +75,10 @@ export function ItineraryBoard({
             <Plus className="h-4 w-4 text-stone-500 " />
             添加天数
           </button>
-          <label className="inline-flex cursor-pointer items-center gap-2 rounded-full border border-stone-200/80 bg-white/90 px-3 py-2 text-xs font-semibold text-stone-600 shadow-sm backdrop-blur transition-all duration-200 hover:border-stone-300 hover:bg-stone-50 hover:shadow-md     ">
+          <label className="travel-import-control inline-flex cursor-pointer items-center gap-2 rounded-full border border-stone-200/80 bg-white/90 px-3 py-2 text-xs font-semibold text-stone-600 shadow-sm backdrop-blur transition-all duration-200 hover:border-stone-300 hover:bg-stone-50 hover:shadow-md     ">
             <FileUp className="h-4 w-4 text-stone-500 " />
             导入JSON
-            <input key={importInputKey} type="file" accept="application/json,.json" onChange={importPlan} className="hidden" />
+            <input key={importInputKey} type="file" accept="application/json,.json" onChange={importPlan} className="sr-only" />
           </label>
           <PlanExportMenu
             isOpen={isExportMenuOpen}
@@ -92,7 +92,7 @@ export function ItineraryBoard({
       </div>
       {isBoardCollapsed ? null : (
         <>
-          <div className="mb-4 flex flex-wrap items-center gap-2 rounded-lg border border-stone-200 bg-white/80 p-3 transition  ">
+          <div className="travel-filter-bar mb-4 flex flex-wrap items-center gap-2 rounded-lg border border-stone-200 bg-white/80 p-3 transition  ">
             <div className="mr-1 inline-flex items-center gap-2 text-xs font-semibold text-stone-500 ">
               <SlidersHorizontal className="h-4 w-4" />
               类型筛选
@@ -150,7 +150,7 @@ export function ItineraryBoard({
       {isAddFormOpen ? (
         <form
           onSubmit={addCustomCard}
-          className="mb-4 grid gap-2 rounded-xl border border-stone-200/80 bg-white/80 p-3 transition-all duration-300   md:grid-cols-[120px_120px_minmax(160px,1.1fr)_120px_120px_minmax(180px,1.2fr)_auto]"
+          className="travel-add-form mb-4 grid gap-2 rounded-xl border border-stone-200/80 bg-white/80 p-3 transition-all duration-300   md:grid-cols-[120px_120px_minmax(160px,1.1fr)_120px_120px_minmax(180px,1.2fr)_auto]"
         >
           <select
             value={cardForm.day}
@@ -213,7 +213,7 @@ export function ItineraryBoard({
       <DragDropContext onDragEnd={onDragEnd}>
         <Droppable droppableId="day-board" direction="horizontal" type="DAY">
           {(provided) => (
-            <div ref={provided.innerRef} {...provided.droppableProps} className="flex gap-4 overflow-x-auto pb-3">
+            <div ref={provided.innerRef} {...provided.droppableProps} className="travel-board-columns flex gap-4 overflow-x-auto pb-3">
               {visibleDays.map(([day, items], index) => (
                 <Draggable key={day} draggableId={`column-${day}`} index={index}>
                   {(dayProvided, daySnapshot) => (

@@ -16,7 +16,6 @@ import {
 } from 'lucide-react';
 import { getDateBadgeClass } from '../utils/date.js';
 import {
-  getCardGlowClass,
   getFuzzyMatchScore,
   getTypeBadgeClass,
   typeAccent,
@@ -43,18 +42,18 @@ export function TripCard({
 
   return (
     <article
-      className={`group relative overflow-hidden rounded-xl border bg-white p-4 shadow-sm transition-all duration-300 ease-out hover:-translate-y-0.5 hover:shadow-lg   ${
+      className={`travel-card group relative overflow-hidden rounded-xl border bg-white p-4 shadow-sm transition-all duration-300 ease-out hover:-translate-y-0.5 hover:shadow-lg   ${
         isDragging
           ? 'border-stone-400 shadow-xl ring-2 ring-stone-300/60   '
           : `border-stone-200/80 hover:border-stone-300/80  `
-      } ${getCardGlowClass(item.type)}`}
+      }`}
     >
-      <span className={`absolute left-0 top-0 h-full w-1 rounded-full transition-all duration-300 ${typeAccent[item.type] || 'bg-slate-400'}`} />
+      <span className={`absolute left-0 top-0 h-full w-1 rounded-full transition-all duration-300 ${typeAccent[item.type] || 'travel-accent travel-type-default'}`} />
       <div className="flex items-start justify-between gap-3">
         <span className={`rounded-full border px-2.5 py-1 text-[11px] font-bold tracking-wide uppercase ${getTypeBadgeClass(item.type)}`}>
           {item.type}
         </span>
-        <div className="flex items-center gap-0.5 text-stone-400 opacity-0 transition-all duration-200 group-hover:opacity-100 ">
+        <div className="travel-card-actions flex items-center gap-0.5 text-stone-400 opacity-0 transition-all duration-200 group-hover:opacity-100 ">
           <GripVertical className="h-4 w-4 shrink-0" />
           <button
             type="button"

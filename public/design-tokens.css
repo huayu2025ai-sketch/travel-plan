@@ -1,0 +1,17 @@
+:root {
+  color-scheme: light;
+  --paper: #f5f1e8;
+  --surface: #fffcf6;
+  --surface-muted: #e8eadd;
+  --ink: #292d27;
+  --muted: #666a60;
+  --line: #dddcd0;
+  --green: #315b43;
+  --green-hover: #274b37;
+  --focus: #ab7133;
+  --danger: #a33b35;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --shadow-card: 0 10px 30px rgba(47, 69, 32, 0.07);
+}

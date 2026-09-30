@@ -1,39 +1,27 @@
 export const typeStyles = {
-  交通: 'border-sky-200 bg-sky-50 text-sky-700   ',
-  景点: 'border-emerald-200 bg-emerald-50 text-emerald-700   ',
-  citywalk: 'border-lime-200 bg-lime-50 text-lime-700   ',
-  美食: 'border-amber-200 bg-amber-50 text-amber-700   ',
-  酒店: 'border-violet-200 bg-violet-50 text-violet-700   ',
-  娱乐: 'border-rose-200 bg-rose-50 text-rose-700   ',
-  工作: 'border-cyan-200 bg-cyan-50 text-cyan-700   ',
+  交通: 'travel-type travel-type-transport',
+  景点: 'travel-type travel-type-sight',
+  citywalk: 'travel-type travel-type-walk',
+  美食: 'travel-type travel-type-food',
+  酒店: 'travel-type travel-type-hotel',
+  娱乐: 'travel-type travel-type-fun',
+  工作: 'travel-type travel-type-work',
 };
 
 export const typeAccent = {
-  交通: 'bg-sky-500',
-  景点: 'bg-emerald-500',
-  citywalk: 'bg-lime-500',
-  美食: 'bg-amber-500',
-  酒店: 'bg-violet-500',
-  娱乐: 'bg-rose-500',
-  工作: 'bg-cyan-500',
+  交通: 'travel-accent travel-type-transport',
+  景点: 'travel-accent travel-type-sight',
+  citywalk: 'travel-accent travel-type-walk',
+  美食: 'travel-accent travel-type-food',
+  酒店: 'travel-accent travel-type-hotel',
+  娱乐: 'travel-accent travel-type-fun',
+  工作: 'travel-accent travel-type-work',
 };
 
 export const typeOptions = ['交通', '景点', 'citywalk', '美食', '酒店', '娱乐', '工作'];
 
 export function getTypeBadgeClass(type) {
-  return typeStyles[type] || 'border-stone-200 bg-stone-50 text-stone-700   ';
-}
-
-export function getCardGlowClass(type) {
-  const glowMap = {
-    交通: 'card-glow card-glow-accent-sky',
-    景点: 'card-glow card-glow-accent-emerald',
-    citywalk: 'card-glow card-glow-accent-lime',
-    美食: 'card-glow card-glow-accent-amber',
-    酒店: 'card-glow card-glow-accent-violet',
-    娱乐: 'card-glow card-glow-accent-rose',
-  };
-  return glowMap[type] || 'card-glow';
+  return typeStyles[type] || 'travel-type travel-type-default';
 }
 
 export function createEmptyCardForm(day) {
