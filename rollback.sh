@@ -42,8 +42,9 @@ if command -v flock >/dev/null 2>&1; then
 fi
 
 # ---------- 0. 清理 candidate 残留（candidate 永远可删） ----------
+# ⚠️ 隔离网（$CAND_NET）不删：留存旧容器当年是 candidate 经 rename 晋升的，
+#    NetworkMode 仍指向该网，网不存在则下方 docker start 直接失败
 docker rm -f "$CAND_WEB" "$CAND_API" >/dev/null 2>&1 || true
-docker network rm "$CAND_NET" >/dev/null 2>&1 || true
 
 # ---------- 1. 定位要恢复的旧容器 ----------
 step "[1/4] 定位回滚目标"
@@ -77,6 +78,7 @@ done
 
 # ---------- 3. 恢复旧容器（先 API 后前端，前端 nginx 启动时要能解析上游名） ----------
 step "[3/4] 恢复 $SUFFIX"
+docker network inspect "$CAND_NET" >/dev/null 2>&1 || docker network create "$CAND_NET" >/dev/null
 docker rename "$API_OLD" "$API_CONTAINER"
 docker network connect "$NPM_NETWORK" "$API_CONTAINER" 2>/dev/null || true
 docker start "$API_CONTAINER" >/dev/null

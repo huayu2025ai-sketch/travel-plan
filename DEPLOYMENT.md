@@ -39,6 +39,7 @@ docker run -d --name <项目>-candidate --network <隔离网> <镜像>:<TAG>
 - candidate **不发布宿主机端口**，公网摸不到；旧容器照常服务，切换期间用户无感知。
 - ⚠️ **不要给 candidate 加 `-p` 端口绑定**：Step 4 切流用 `rename` 直接晋升 candidate，`-p` 绑定会跟着容器进生产并长期占用，**第二次部署的 candidate 就无端口可用**（travel-plan 实际踩中）。预验证一律 `docker exec` 进容器内探测（见 Step 3）——生产流量本就走 npm-network（无宿主端口），容器内路径反而更真实。
 - **隔离机制**：流量入口是 Nginx Proxy Manager（NPM）所在的 `npm-network`，candidate 不挂该网络 = 天然不接流量。
+- ⚠️ **隔离网切流后保留，不要删**：candidate 经 rename 晋升后 `NetworkMode` 永远指向隔离网，删网会让容器（含日后回滚目标）无法 `docker start`（2026-09-30 实机踩中，自动回滚因此失败）。隔离网常驻、无容器挂载时零开销。
 - **多容器项目**（前端按容器名反代后端，如 travel-plan 的 `proxy_pass http://travel-plan-api:8787`）：另建专用隔离网（如 `travel-plan-cand-net`），candidate 全挂上去，并给后端 candidate 加 `--network-alias <生产后端容器名>`。这样 candidate 前端的 proxy_pass 会解析到「新后端」，实现新栈全链路预验证；别名只在隔离网内生效，不与生产容器冲突。
 
 ### Step 3：预验证（闸门，任何一条挂 = 放弃本次发布）
@@ -69,7 +70,7 @@ docker rename <项目>-candidate     <项目>     && docker network connect npm-
 ```
 
 - 切流窗口秒级（stop 旧 → start 新）。
-- ⚠️ **切流后必须 reload NPM**：nginx 对按容器名的 upstream 是启动时解析一次，candidate 挂上 `npm-network` 后是新 IP，不 reload 公网就会继续打到旧 IP → 502。命令：`docker exec <npm容器> nginx -s reload`。**回滚时同理。**
+- ⚠️ **切流后必须 reload NPM**：nginx 对按容器名的 upstream 是启动时解析一次，candidate 挂上 `npm-network` 后是新 IP，不 reload 公网就会继续打到旧 IP → 502。命令：`docker exec <npm容器> nginx -s reload`。**回滚时同理。**reload 失败时先看 stderr：任何无关站点的死 upstream（容器已不存在）都会卡住整体 reload（真实案例：locus-flow 的死反代卡住 NPM，travel-plan 复验失败被迫回滚）。
 - 切流后必须做**公网复验**（走正式域名 200 + 内容标记），不过关按发布失败处理。
 - 旧容器留存 24 小时，确认无异常后由下一次部署的开头自动清理（脚本按容器创建时间判断超期）。
 
@@ -170,6 +171,7 @@ docker exec <pg容器> pg_dump -U <user> <db> > backup_$(date +%Y%m%d-%H%M).sql
 - ❌ 不用 `latest` tag 部署
 - ❌ 旧容器/旧镜像在回滚窗口（24h）内不得 `docker rm` / `docker rmi`
 - ❌ 未经 Step 3 验证的容器不得接入 `npm-network`
+- ❌ 不删各站 candidate 隔离网（晋升容器的 `NetworkMode` 指向它，见 Step 2）
 
 ---
 

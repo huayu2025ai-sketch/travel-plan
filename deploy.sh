@@ -102,10 +102,11 @@ gate() { # <描述> <检查函数> <参数...>
 # 注：预验证不发布宿主端口，200 状态闸门用 cand_web_ok（busybox wget 对 4xx/5xx
 # 返回非零），内容闸门用 cand_marker_*，全部从 candidate 容器内发请求
 
-# 退出兜底：删除 candidate 容器与隔离网络（切流完成后两者已改名/解绑，此操作为无害空转）
+# 退出兜底：只删 candidate 容器。隔离网（cand-net）必须保留：candidate 切流时经
+# rename 晋升，NetworkMode 永远指向该网，删网后容器（含未来的回滚目标）就无法
+# docker start——2026-09-30 实机踩中，自动回滚因此失败
 cleanup_candidates() {
   docker rm -f "$CAND_WEB" "$CAND_API" >/dev/null 2>&1 || true
-  docker network rm "$CAND_NET" >/dev/null 2>&1 || true
 }
 trap cleanup_candidates EXIT
 
@@ -144,10 +145,12 @@ reload_npm() {
     echo "  ⚠️ 未找到 Nginx Proxy Manager 容器，请手动 reload（否则公网可能仍指向旧容器 IP）"
     return 1
   fi
-  if docker exec "$npm_c" nginx -s reload >/dev/null 2>&1; then
+  local err
+  if err="$(docker exec "$npm_c" nginx -s reload 2>&1)"; then
     echo "  ✅ 已 reload $npm_c（上游 DNS 重新解析）"
   else
-    echo "  ⚠️ docker exec $npm_c nginx -s reload 失败，请手动 reload NPM"
+    echo "  ⚠️ docker exec $npm_c nginx -s reload 失败：$err"
+    echo "     （多为无关站点死 upstream 卡住整体 reload，需清理 NPM 死配置）"
     return 1
   fi
 }
@@ -227,15 +230,17 @@ docker network inspect "$CAND_NET" >/dev/null 2>&1 || docker network create "$CA
 # 不带 -p：切流 rename 会把端口绑定带进生产，预验证走 docker exec 容器内探测
 docker run -d --name "$CAND_API" \
   --network "$CAND_NET" --network-alias "$API_CONTAINER" \
+  --restart unless-stopped \
   --env-file "$ROOT/.env" \
   -e NODE_ENV=production -e API_PORT=8787 -e TZ=Asia/Shanghai -e TRUST_PROXY=1 \
   "travel-plan-api:$TAG" >/dev/null
 wait_in_container "$CAND_API" "http://127.0.0.1:8787/api/health" 30 \
   || fail "API candidate 30 秒内未就绪（docker logs $CAND_API）"
 
-# 前端 candidate
+# 前端 candidate（--restart 会随 rename 带进生产，补上 compose 的自愈语义）
 docker run -d --name "$CAND_WEB" \
   --network "$CAND_NET" \
+  --restart unless-stopped \
   "travel-plan:$TAG" >/dev/null
 wait_in_container "$CAND_WEB" "http://127.0.0.1/" 30 \
   || fail "前端 candidate 30 秒内未就绪（docker logs $CAND_WEB）"
