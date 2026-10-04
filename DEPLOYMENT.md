@@ -61,12 +61,14 @@ docker exec <项目>-candidate wget -qO- http://127.0.0.1/api/health | grep -q '
 ### Step 4：原子切流
 
 ```bash
-# 旧容器按「自身运行的镜像版本」改名留存（可并存多个历史版本）
+# 前后端旧容器使用同一个版本后缀留存（可并存多个历史版本）
 docker stop <项目>-api && docker rename <项目>-api <项目>-api-old-<旧TAG>
 docker stop <项目>     && docker rename <项目>     <项目>-old-<旧TAG>
-# candidate 换正式名 → 接回 npm-network → 启动（先 API 后前端，前端 nginx 启动时要能解析上游名）
-docker rename <项目>-api-candidate <项目>-api && docker network connect npm-network <项目>-api && docker start <项目>-api
-docker rename <项目>-candidate     <项目>     && docker network connect npm-network <项目>     && docker start <项目>
+# candidate 停止后换正式名 → 摘下隔离网 → 接回 npm-network → 启动（先 API 后前端）
+docker stop <项目>-api-candidate && docker rename <项目>-api-candidate <项目>-api
+docker network disconnect <隔离网> <项目>-api && docker network connect npm-network <项目>-api && docker start <项目>-api
+docker stop <项目>-candidate && docker rename <项目>-candidate <项目>
+docker network disconnect <隔离网> <项目> && docker network connect npm-network <项目> && docker start <项目>
 ```
 
 - 切流窗口秒级（stop 旧 → start 新）。
@@ -74,11 +76,12 @@ docker rename <项目>-candidate     <项目>     && docker network connect npm-
 - 切流后必须做**公网复验**（走正式域名 200 + 内容标记），不过关按发布失败处理。
 - 旧容器留存 24 小时，确认无异常后由下一次部署的开头自动清理（脚本按容器创建时间判断超期）。
 
-### Step 5：回滚（出问题时的三条命令）
+### Step 5：回滚
 
 ```bash
+# 双容器项目需同时恢复前端和 API；下列命令仅展示单容器站点的顺序
 docker stop <项目> && docker rm <项目>     # 只删失败的新版本容器
-docker rename <项目>-old-<TAG> <项目> && docker start <项目>
+docker rename <项目>-old-<旧TAG> <项目> && docker start <项目>
 docker exec <npm容器> nginx -s reload      # 别忘了
 ```
 
@@ -206,7 +209,9 @@ docker exec travel-plan-candidate wget -qO- http://127.0.0.1/ | grep -q "AI 旅�
 docker exec travel-plan-candidate wget -qO- http://127.0.0.1/app/ | grep -q "我的旅行行程表"
 docker exec travel-plan-candidate wget -q -O /dev/null http://127.0.0.1/templates/
 docker exec travel-plan-candidate wget -qO- http://127.0.0.1/sitemap.xml | grep -q "travel-plan.solalab.cn"
-docker exec travel-plan-api-candidate wget -qO- http://127.0.0.1:8787/api/health  # 人工确认 ok:true 且 hasDeepSeekKey:true
+docker exec travel-plan-api-candidate wget -qO- http://127.0.0.1:8787/api/health | grep -q '"ok":true'
+docker exec travel-plan-api-candidate wget -qO- http://127.0.0.1:8787/api/health | grep -q '"hasDeepSeekKey":true'
+docker exec travel-plan-candidate wget -qO- http://127.0.0.1/api/health | grep -q '"ok":true'
 
 # 5) 原子切流：旧容器按当前镜像版本改名留存，candidate 顶上（API 先）
 OLD_TAG=20260929-f9cf2a5   # 改成 docker ps 里看到的当前线上版本
@@ -218,6 +223,8 @@ docker rename travel-plan-api-candidate travel-plan-api
 docker network disconnect travel-plan-cand-net travel-plan-api
 docker network connect npm-network travel-plan-api
 docker start travel-plan-api
+# 确认 API 健康后再启动前端，以便 Nginx 解析 travel-plan-api
+docker exec travel-plan-api wget -qO- http://127.0.0.1:8787/api/health | grep -q '"ok":true'
 docker rename travel-plan-candidate travel-plan
 docker network disconnect travel-plan-cand-net travel-plan
 docker network connect npm-network travel-plan
@@ -232,9 +239,16 @@ curl -s https://travel-plan.solalab.cn/api/health
 手工回滚（只删失败的新版本，`-old-*` 绝不删；回滚后同样要 reload NPM）：
 
 ```bash
+# 与切流时记录的旧版本一致；若在新 shell 操作，先重新设置 OLD_TAG
+OLD_TAG=20260929-f9cf2a5
 docker stop travel-plan-api travel-plan && docker rm travel-plan-api travel-plan
-docker rename travel-plan-api-old-$TAG travel-plan-api && docker start travel-plan-api
-docker rename travel-plan-old-$TAG travel-plan && docker start travel-plan
+docker rename travel-plan-api-old-$OLD_TAG travel-plan-api
+docker network connect npm-network travel-plan-api 2>/dev/null || true
+docker start travel-plan-api
+docker exec travel-plan-api wget -qO- http://127.0.0.1:8787/api/health | grep -q '"ok":true'
+docker rename travel-plan-old-$OLD_TAG travel-plan
+docker network connect npm-network travel-plan 2>/dev/null || true
+docker start travel-plan
 docker exec npm-app-1 nginx -s reload
 ```
 

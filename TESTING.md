@@ -28,14 +28,14 @@ npm test
 
 ## Current coverage
 
-The current suite contains seven test files and 45 cases. It covers DeepSeek response normalization, retry and weather-provider behavior; request validation, concurrency-safe quota reservations and body limits; Vercel route behavior; budget parsing and concurrent edit/weather validity; plus key App interactions including edits made while AI generation is pending. Smoke and full browser E2E tests are not yet implemented.
+As of 2026-10-04, `npm test -- --reporter=dot` passes 9 test files and 55 cases. The suite covers DeepSeek response normalization, retry and weather-provider behavior; request validation, concurrency-safe quota reservations and body limits; Vercel route behavior; budget parsing and concurrent edit/weather validity; public-site output; and key App/template interactions including edits made while AI generation is pending. Smoke and full browser E2E tests are not yet implemented. Run `npm test` for the current count.
 
 ## Conventions
 
 - Test files live next to the code they test or under `tests/`.
-- File naming: `*.test.js` or `*.spec.js`.
+- File naming: `*.test.js`, `*.spec.js`, `*.test.jsx`, or `*.spec.jsx` (TypeScript variants are also included in `vitest.config.js`).
 - Use `describe`/`it` blocks with clear intent.
 - Assert behavior, not existence — avoid `expect(x).toBeDefined()`.
 - Mock external dependencies (APIs, databases, environment variables).
 - Server tests use `// @vitest-environment node`.
-- Component tests use the default `jsdom` environment.
+- The default environment is `node`; component tests declare `// @vitest-environment jsdom` at the top of the file.

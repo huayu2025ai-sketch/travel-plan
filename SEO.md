@@ -26,7 +26,7 @@ Docker Nginx 对不存在路径返回真实 404，不再将所有路径回退到
 
 费用默认待估算，日期和天气留空；页面说明停留时间为建议。资料链接用于景点背景与出行核对，不表示整条路线获得官方推荐或经过实地验证。更新内容时同时更新实际整理日期。
 
-教程由 `src/content/guides.js` 定义；产品操作变化后应同步修改。静态 HTML 由 `site/render.js` 生成，样式在 `public/site.css`。域名在 `site/render.js`，看板埋点的正式域名限制在 `src/utils/analytics.js` 和 `index.html`；未来换域名时需要一并修改。
+教程由 `src/content/guides.js` 定义；产品操作变化后应同步修改。静态 HTML 由 `site/render.js` 生成，站点样式在 `public/site.css`，共享色板在 `public/design-tokens.css`；看板主题由 `src/app-theme.css` 使用同一组语义色。域名在 `site/render.js`，看板埋点的正式域名限制在 `src/utils/analytics.js` 和 `index.html`；未来换域名时需要一并修改。
 
 ## 转化统计
 
@@ -46,7 +46,7 @@ Docker Nginx 对不存在路径返回真实 404，不再将所有路径回退到
 ## 上线步骤
 
 1. 执行 `npm test && npm run build && npm run check:site`。
-2. 按当前生产部署方式发布；Docker 使用 `docker compose up -d --build`。
+2. 正式站点在服务器仓库目录运行 `./deploy.sh`；候选容器通过隔离网络预验证后再切流，失败时按 [DEPLOYMENT.md](DEPLOYMENT.md) 回滚。只有尚未由脚本接管的新环境才用 `docker compose up -d --build` 初次启动。
 3. 检查首页、模板、`/app/`、站点地图和未知地址的 404；确认旧行程仍在。
 4. 使用站点所有者账号验证 Google Search Console、Bing Webmaster Tools、百度搜索资源平台；按各平台实际可用入口提交站点地图或网址。
 5. 正式站点进行一次模板使用与导出，确认 Umami 收到事件，再记录初始收录和流量基线。

@@ -30,8 +30,9 @@ All commands run from the repository root.
 | `npm run dev` | Start Vite dev server on port 3000 with the built-in `/api/*` plugin. This is the default local workflow. |
 | `npm run client` | Same as `npm run dev`. |
 | `npm run server` | Start the standalone Express API server on `API_PORT` (default 8787). Use this when running the production frontend build separately. |
-| `npm run build` | Build the production frontend bundle to `dist/`. |
-| `npm run preview` | Preview the production build via Vite. |
+| `npm run build` | Build the app and 12 public static pages to `dist/`. |
+| `npm run check:site` | Check built public pages, metadata, links, app assets, and SEO files. Run after `npm run build`. |
+| `npm run preview` | Preview the production build via Vite; the preview does not provide `/api/*`. |
 | `npm test` | Run the full Vitest suite once. |
 | `npm test -- tests/server/deepseek.test.js` | Run a single test file. |
 | `npm test -- --reporter=verbose` | Run tests with verbose output. |
@@ -60,10 +61,11 @@ This is a React + Vite frontend with a small Node.js API layer. `src/main.jsx` o
 
 ### Frontend (`src/App.jsx` and modules)
 
-- `App.jsx` coordinates the planning board, input forms, and print/export dialogs.
+- `App.jsx` coordinates the planning board, input forms, and file import/export interactions.
 - `components/ItineraryComponents.jsx` owns the itinerary cards and day columns.
 - `components/TravelControls.jsx` owns generation-progress controls.
-- `utils/date.js`, `utils/plan.js`, `utils/storage.js`, and `utils/export.js` isolate date mapping, plan data, persistence, and export behavior.
+- `utils/date.js`, `utils/plan.js`, `utils/storage.js`, `utils/export.js`, and `utils/plan-image.js` isolate date mapping, plan data, persistence, and file export behavior.
+- The public site uses `public/site.css`; shared color and radius tokens live in `public/design-tokens.css`. Both the public pages and `index.html` load those tokens, and `src/app-theme.css` uses them for the board.
 - State is held in React hooks and persisted to `localStorage`:
   - `travel-plan-board-v1` stores the current trip plan.
   - `travel-plan-conversation-v1` stores the recent conversation history used for contextual refinements.
@@ -77,7 +79,6 @@ This is a React + Vite frontend with a small Node.js API layer. `src/main.jsx` o
 - Export features build output in-memory:
   - JSON import/export reads/writes the full plan object.
   - Markdown export builds a text itinerary.
-  - Print export builds a standalone HTML document with embedded CSS.
   - Image export renders the itinerary to a `<canvas>` and produces a PNG blob.
 
 ### API generation flow (`server/deepseek.js`)
@@ -128,7 +129,7 @@ The limiter is intentionally dependency-free and process-local. In a multi-insta
 
 ## Deployment notes
 
-- **Production deploys and rollbacks use the repo-root `deploy.sh` / `rollback.sh` on the server — see `DEPLOYMENT.md` for the spec.** Flow: build timestamped images → start candidate containers on an isolated network (ports bound to `127.0.0.1`) → pre-verify gates → atomic cutover with old containers renamed and retained for 24h → public re-check; failed cutovers auto-rollback. Do NOT run `docker compose down` / `up` against the live containers anymore (`docker compose build` is still used by the script). Deploy from the server repo at `/opt/git/travel-plan`, which pulls from Gitee — push both remotes locally.
+- **Production deploys and rollbacks use the repo-root `deploy.sh` / `rollback.sh` on the server — see `DEPLOYMENT.md` for the spec.** Flow: build version-tagged images → start candidate containers on an isolated network without publishing host ports → pre-verify from inside the containers → cut over with old containers renamed and retained for 24h → public re-check; failed cutovers auto-rollback. Do NOT run `docker compose down` / `up` against the live containers anymore (`docker compose build` is still used by the script). Deploy from the server repo at `/opt/git/travel-plan`, which pulls from Gitee — push both remotes locally.
 - Docker (recommended for production): the root `Dockerfile` builds the Vite frontend and serves it with Nginx; Nginx proxies `/api/` to the `travel-plan-api` Node container on port `8787`. `server/Dockerfile` runs the API container. `docker-compose.yml` attaches both services to the external `npm-network` and does not publish application ports to the host.
 - Nginx Proxy Manager must join the same external network and proxy to `travel-plan:80`. The frontend Nginx preserves the upstream client address headers used by the API rate limiter.
 - Required Docker environment: `DEEPSEEK_API_KEY`. Optional weather variables are `QWEATHER_API_KEY`, `QWEATHER_BASE_URL`, and `QWEATHER_GEO_URL`; without the key, weather falls back to Open-Meteo.

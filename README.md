@@ -142,7 +142,7 @@ travel-plan/
 ├── vercel.json            # Vercel 部署配置
 ├── site/                  # 公开站点构建：静态页渲染器、分享卡片与 Vite 插件
 ├── scripts/               # build-site.js 生成静态页面，check-site.js 上线检查
-├── public/                # 站点静态资源（favicon、分享卡片、site.css）
+├── public/                # 站点静态资源（favicon、分享卡片、site.css、design-tokens.css）
 ├── SEO.md                 # 公开站点、模板与 SEO 维护说明
 ├── DEPLOYMENT.md          # 线上部署规范：预验证 + 秒回滚
 ├── deploy.sh              # 线上部署脚本（构建 → 隔离预验证 → 原子切流 → 失败自动回滚）
@@ -218,7 +218,7 @@ vercel
 
 ### Docker Compose
 
-生产部署推荐使用仓库中的 `Dockerfile`、`server/Dockerfile` 和 `docker-compose.yml`。前端容器内的 Nginx 提供静态页面，并将 `/api/` 反向代理到 `travel-plan-api:8787`；两个容器只使用内部端口，不直接映射到宿主机，且各自带 healthcheck（API 镜像内也内置了 `HEALTHCHECK`）。
+Docker 镜像和服务配置由仓库中的 `Dockerfile`、`server/Dockerfile` 与 `docker-compose.yml` 定义。前端容器内的 Nginx 提供静态页面，并将 `/api/` 反向代理到 `travel-plan-api:8787`；两个容器只使用内部端口，不直接映射到宿主机，且各自带 healthcheck（API 镜像内也内置了 `HEALTHCHECK`）。
 
 先创建或复用 Nginx Proxy Manager 所在的外部网络：
 
@@ -226,13 +226,15 @@ vercel
 docker network create npm-network
 ```
 
-在项目根目录准备 `.env`，至少设置 `DEEPSEEK_API_KEY`，然后启动：
+在项目根目录准备 `.env`，至少设置 `DEEPSEEK_API_KEY`。新环境的初次启动可使用：
 
 ```bash
 docker compose up -d --build
 ```
 
 镜像标签默认为 `latest`，可通过 `IMAGE_TAG` 覆盖；外部网络名称默认为 `npm-network`，可通过 `NPM_NETWORK_NAME` 覆盖。
+
+现有正式站点已由 `deploy.sh` / `rollback.sh` 管理容器。后续发布在服务器仓库目录运行 `./deploy.sh`；它使用带提交哈希的镜像标签、隔离网络内的候选容器、切流前验证和失败自动回滚。需要恢复留存的旧版本时运行 `./rollback.sh`。**脚本接管后不要对线上容器执行 `docker compose down` 或 `docker compose up`**；具体命令与回滚窗口见 [DEPLOYMENT.md](DEPLOYMENT.md)。
 
 Nginx Proxy Manager 与本项目需要加入同一个 `npm-network`。创建代理主机时，将目标设置为 `travel-plan`、端口 `80`。浏览器访问页面和 `/api/*` 均通过前端 Nginx 同源转发，Node API 不需要暴露宿主机端口。
 
