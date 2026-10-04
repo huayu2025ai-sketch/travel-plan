@@ -26,12 +26,12 @@
 
 ## 快速开始
 
-环境要求：Node.js 20+（Docker 镜像基于 `node:20-alpine`，CI 使用 Node 22）。
+环境要求：Node.js 20.19+ 或 22.12+（Vite 7 的版本要求；Docker 镜像基于 `node:20-alpine`，CI 使用 Node 22）。
 
 ### 1. 安装依赖
 
 ```bash
-npm install
+npm ci
 ```
 
 ### 2. 配置环境变量
@@ -94,7 +94,7 @@ npm run client
 
 | 命令 | 说明 |
 |------|------|
-| `npm run dev` | 启动 Vite 开发服务器（含内置 API，别名） |
+| `npm run dev` | 启动 Vite 开发服务器（含内置 API，`client` 的别名） |
 | `npm run client` | 启动 Vite 开发服务器（含内置 API，端口 3000） |
 | `npm run server` | 独立启动 Express API 服务（默认端口 8787，可用 `API_PORT` 覆盖） |
 | `npm run build` | 构建看板及 12 个公开静态页面到 `dist/` |
@@ -271,4 +271,4 @@ npm run server
 
 ## 许可证
 
-MIT
+仓库目前未包含许可证文件，许可证尚未指定。
