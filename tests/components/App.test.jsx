@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import React from 'react';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from '../../src/App.jsx';
 
@@ -35,6 +35,30 @@ describe('App key interactions', () => {
 
     expect(screen.getByText('测试景点')).toBeTruthy();
     expect(screen.getByText('1360-1460元')).toBeTruthy();
+  });
+
+  it.each([false, true])('discards card edits on cancel (filtered: %s)', (filtered) => {
+    render(<App />);
+
+    if (filtered) {
+      fireEvent.click(screen.getByRole('button', { name: '交通 2', exact: true }));
+    }
+
+    fireEvent.click(screen.getByRole('button', { name: '编辑 龙门石窟' }));
+    fireEvent.change(screen.getByPlaceholderText('卡片标题'), { target: { value: '未保存的标题' } });
+    fireEvent.change(screen.getByPlaceholderText('费用：200-300元 / 260元/晚×3晚'), { target: { value: '999' } });
+    fireEvent.change(screen.getByPlaceholderText('建议'), { target: { value: '未保存的建议' } });
+    fireEvent.click(screen.getByRole('button', { name: '取消', exact: true }));
+
+    expect(screen.queryByPlaceholderText('卡片标题')).toBeNull();
+    const card = screen.getByRole('heading', { name: '龙门石窟' }).closest('article');
+    expect(within(card).getByText('120元')).toBeTruthy();
+    expect(screen.queryByText('未保存的建议')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: '编辑 龙门石窟' }));
+    expect(screen.getByPlaceholderText('卡片标题').value).toBe('龙门石窟');
+    expect(screen.getByPlaceholderText('费用：200-300元 / 260元/晚×3晚').value).toBe('120元');
+    expect(screen.getByPlaceholderText('建议').value).toBe('傍晚入园更舒适，夜游灯光亮起后观感更震撼。');
   });
 
   it('keeps committed board edits made while generation is pending', async () => {

@@ -37,6 +37,7 @@ export function ItineraryBoard({
   plan,
   pendingDeleteId,
   editingCardId,
+  setEditingCardId,
   editForm,
   deleteDay,
   startEditCard,

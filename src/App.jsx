@@ -818,6 +818,7 @@ function App() {
           plan={plan}
           pendingDeleteId={pendingDeleteId}
           editingCardId={editingCardId}
+          setEditingCardId={setEditingCardId}
           editForm={editForm}
           deleteDay={deleteDay}
           startEditCard={startEditCard}
