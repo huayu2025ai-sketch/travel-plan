@@ -105,7 +105,8 @@ textarea:focus {
 }
 
 .animate-fade-up {
-  animation: fade-up 0.5s cubic-bezier(0.4, 0, 0.2, 1) both;
+  /* Release the transform after entry so fixed-position drags use the viewport. */
+  animation: fade-up 0.5s cubic-bezier(0.4, 0, 0.2, 1) backwards;
 }
 
 .animate-fade-up-delay-1 { animation-delay: 0.1s; }

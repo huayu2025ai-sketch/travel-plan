@@ -1,30 +1,27 @@
-import React, { useRef } from 'react';
-import { DragDropContext, Draggable, Droppable } from '@hello-pangea/dnd';
+import React, { memo, useRef } from 'react';
+import { Draggable, Droppable } from '@hello-pangea/dnd';
 import {
   CalendarDays,
   Check,
-  ChevronDown,
   Clock3,
   Coins,
   Copy,
   GripVertical,
   Pencil,
-  Plus,
-  SlidersHorizontal,
   Trash2,
   X,
 } from 'lucide-react';
 import { getDateBadgeClass } from '../utils/date.js';
 import {
-  getFuzzyMatchScore,
   getTypeBadgeClass,
   typeAccent,
   typeOptions,
 } from '../utils/plan.js';
 
-export function TripCard({
+export const TripCard = memo(function TripCard({
   item,
   isDragging,
+  dragHandleProps,
   pendingDeleteId,
   editingCardId,
   editForm,
@@ -42,7 +39,7 @@ export function TripCard({
 
   return (
     <article
-      className={`travel-card group relative overflow-hidden rounded-xl border bg-white p-4 shadow-sm transition-all duration-300 ease-out hover:-translate-y-0.5 hover:shadow-lg   ${
+      className={`travel-card group relative overflow-hidden rounded-xl border bg-white p-4 shadow-sm ${isDragging ? 'travel-card-dragging' : ''} ${
         isDragging
           ? 'border-stone-400 shadow-xl ring-2 ring-stone-300/60   '
           : `border-stone-200/80 hover:border-stone-300/80  `
@@ -53,8 +50,17 @@ export function TripCard({
         <span className={`rounded-full border px-2.5 py-1 text-[11px] font-bold tracking-wide uppercase ${getTypeBadgeClass(item.type)}`}>
           {item.type}
         </span>
-        <div className="travel-card-actions flex items-center gap-0.5 text-stone-400 opacity-0 transition-all duration-200 group-hover:opacity-100 ">
-          <GripVertical className="h-4 w-4 shrink-0" />
+        <div className="travel-card-actions flex items-center gap-0.5 text-stone-400">
+          {dragHandleProps ? (
+            <div
+              {...dragHandleProps}
+              aria-label={`拖动 ${item.title}`}
+              title="拖动调整顺序或移到其他日期；空格键开始，方向键移动"
+              className="travel-card-drag-handle flex h-8 w-8 shrink-0 items-center justify-center rounded-md"
+            >
+              <GripVertical className="h-4 w-4" />
+            </div>
+          ) : null}
           <button
             type="button"
             onClick={onStartEdit}
@@ -182,7 +188,7 @@ export function TripCard({
       ) : null}
     </article>
   );
-}
+});
 
 
 export function DayColumn({
@@ -222,6 +228,43 @@ export function DayColumn({
     input.focus();
     input.click();
   };
+
+  const getCardProps = (item) => ({
+    item,
+    pendingDeleteId,
+    editingCardId,
+    editForm: editingCardId === item.id ? editForm : undefined,
+    onStartEdit: () => onStartEdit(item),
+    onEditField,
+    onSaveEdit: () => onSaveEdit(day, item.id),
+    onCancelEdit,
+    onDuplicate: () => onDuplicate(day, item.id),
+    onRequestDelete: () => onRequestDelete(item.id),
+    onConfirmDelete: () => onConfirmDelete(day, item.id),
+    onCancelDelete,
+  });
+
+  // Keep card content stable when only the drop target's highlight changes.
+  const cards = items.map((item, index) => {
+    const cardProps = getCardProps(item);
+    if (isFilteredView) {
+      return <div key={item.id} className="travel-card-slot"><TripCard {...cardProps} isDragging={false} /></div>;
+    }
+    return (
+      <Draggable
+        key={item.id}
+        draggableId={item.id}
+        index={index}
+        isDragDisabled={editingCardId === item.id || pendingDeleteId === item.id}
+      >
+        {(provided, snapshot) => (
+          <div ref={provided.innerRef} {...provided.draggableProps} className="travel-card-slot" style={provided.draggableProps.style}>
+            <TripCard {...cardProps} dragHandleProps={provided.dragHandleProps} isDragging={snapshot.isDragging} />
+          </div>
+        )}
+      </Draggable>
+    );
+  });
 
   return (
     <section
@@ -290,53 +333,36 @@ export function DayColumn({
           </p>
         ) : null}
       </div>
-      <Droppable droppableId={day} type="CARD">
+      <Droppable
+        droppableId={day}
+        type="CARD"
+        isDropDisabled={isFilteredView}
+        renderClone={(provided, snapshot, rubric) => (
+          <div
+            ref={provided.innerRef}
+            {...provided.draggableProps}
+            className="travel-app travel-drag-preview travel-card-slot"
+            style={provided.draggableProps.style}
+          >
+            <TripCard
+              {...getCardProps(items[rubric.source.index])}
+              dragHandleProps={provided.dragHandleProps}
+              isDragging={snapshot.isDragging}
+            />
+          </div>
+        )}
+      >
         {(provided, snapshot) => (
           <div
             ref={provided.innerRef}
             {...provided.droppableProps}
-            className={`mt-3 flex flex-1 flex-col gap-3 rounded-lg transition ${
+            className={`travel-card-list relative mt-3 flex flex-1 flex-col rounded-lg ${
               snapshot.isDraggingOver ? 'bg-white/90 ring-2 ring-stone-300  ' : ''
             }`}
           >
-            {items.length > 0 ? (
-              items.map((item, index) => {
-                const cardProps = {
-                  item,
-                  pendingDeleteId,
-                  editingCardId,
-                  editForm,
-                  onStartEdit: () => onStartEdit(item),
-                  onEditField,
-                  onSaveEdit: () => onSaveEdit(day, item.id),
-                  onCancelEdit,
-                  onDuplicate: () => onDuplicate(day, item.id),
-                  onRequestDelete: () => onRequestDelete(item.id),
-                  onConfirmDelete: () => onConfirmDelete(day, item.id),
-                  onCancelDelete,
-                };
-
-                if (isFilteredView) {
-                  return <TripCard key={item.id} {...cardProps} isDragging={false} />;
-                }
-
-                return (
-                  <Draggable key={item.id} draggableId={item.id} index={index}>
-                    {(dragProvided, dragSnapshot) => (
-                      <div
-                        ref={dragProvided.innerRef}
-                        {...dragProvided.draggableProps}
-                        {...dragProvided.dragHandleProps}
-                        style={dragProvided.draggableProps.style}
-                      >
-                        <TripCard {...cardProps} isDragging={dragSnapshot.isDragging} />
-                      </div>
-                    )}
-                  </Draggable>
-                );
-              })
-            ) : (
-              <div className="empty-droppable flex flex-1 items-center justify-center rounded-xl border border-dashed border-stone-300/60 bg-white/40 p-6 text-center  ">
+            {cards}
+            {items.length === 0 && !snapshot.isUsingPlaceholder ? (
+              <div className="travel-empty-drop pointer-events-none absolute inset-0 flex items-center justify-center rounded-xl border border-dashed border-stone-300/60 bg-white/40 p-6 text-center">
                 <div>
                   <GripVertical className="mx-auto h-6 w-6 text-stone-300 " />
                   <p className="mt-2 text-sm text-stone-400 ">
@@ -344,7 +370,7 @@ export function DayColumn({
                   </p>
                 </div>
               </div>
-            )}
+            ) : null}
             {provided.placeholder}
           </div>
         )}

@@ -211,16 +211,21 @@ export function ItineraryBoard({
           </button>
         </form>
       ) : null}
-      <DragDropContext onDragEnd={onDragEnd}>
+      <p className="travel-drag-hint mb-3 text-xs text-stone-500">拖动卡片右上角的手柄调整顺序或移到其他日期；靠近看板边缘可自动滚动。</p>
+      <DragDropContext
+        onDragEnd={onDragEnd}
+        dragHandleUsageInstructions="按空格键开始拖动，使用方向键调整位置，再按空格键放下，按 Escape 键取消。"
+      >
         <Droppable droppableId="day-board" direction="horizontal" type="DAY">
           {(provided) => (
-            <div ref={provided.innerRef} {...provided.droppableProps} className="travel-board-columns flex gap-4 overflow-x-auto pb-3">
+            <div ref={provided.innerRef} {...provided.droppableProps} className="travel-board-columns flex overflow-x-auto pb-3">
               {visibleDays.map(([day, items], index) => (
                 <Draggable key={day} draggableId={`column-${day}`} index={index}>
                   {(dayProvided, daySnapshot) => (
                     <div
                       ref={dayProvided.innerRef}
                       {...dayProvided.draggableProps}
+                      className="travel-day-slot"
                       style={dayProvided.draggableProps.style}
                     >
                       <DayColumn

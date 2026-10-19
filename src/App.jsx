@@ -331,6 +331,7 @@ function App() {
   const onDragEnd = (result) => {
     const { source, destination, type } = result;
     if (!destination) return;
+    if (source.droppableId === destination.droppableId && source.index === destination.index) return;
 
     if (type === 'DAY') {
       const orderedDays = Array.from(days);

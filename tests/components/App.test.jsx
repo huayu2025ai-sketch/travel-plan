@@ -37,6 +37,34 @@ describe('App key interactions', () => {
     expect(screen.getByText('1360-1460元')).toBeTruthy();
   });
 
+  it('uses a dedicated keyboard-accessible handle and pauses dragging during card actions', () => {
+    render(<App />);
+
+    const handle = screen.getByRole('button', { name: '拖动 龙门石窟', exact: true });
+    expect(handle.tabIndex).toBe(0);
+    const card = screen.getByRole('heading', { name: '龙门石窟' }).closest('article');
+    expect(card.parentElement.getAttribute('role')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: '编辑 龙门石窟' }));
+    expect(screen.queryByRole('button', { name: '拖动 龙门石窟', exact: true })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: '取消', exact: true }));
+    expect(screen.getByRole('button', { name: '拖动 龙门石窟', exact: true }).tabIndex).toBe(0);
+
+    fireEvent.click(screen.getByRole('button', { name: '删除 龙门石窟' }));
+    expect(screen.queryByRole('button', { name: '拖动 龙门石窟', exact: true })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: '取消', exact: true }));
+    expect(screen.getByRole('button', { name: '拖动 龙门石窟', exact: true }).tabIndex).toBe(0);
+  });
+
+  it('keeps filtered cards readable without offering an unavailable drag action', () => {
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: '交通 2', exact: true }));
+    expect(screen.getByRole('heading', { name: '龙门石窟' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: '拖动 龙门石窟', exact: true })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: '全部 9', exact: true }));
+    expect(screen.getByRole('button', { name: '拖动 龙门石窟', exact: true }).tabIndex).toBe(0);
+  });
+
   it.each([false, true])('discards card edits on cancel (filtered: %s)', (filtered) => {
     render(<App />);
 

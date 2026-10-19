@@ -60,12 +60,23 @@
 .travel-accent { background: var(--type-color); }
 .travel-add-form { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 16px; border-color: var(--line); border-radius: var(--radius-md); background: var(--surface); }
 .travel-add-form > button { min-height: 40px; }
-.travel-board-columns { gap: 14px; padding: 2px 0 16px; scroll-padding-inline: 2px; }
+.travel-board-columns { padding: 2px 0 16px; scroll-padding-inline: 2px; overflow-anchor: none; }
+/* DnD measures margin boxes, so spacing must travel with each draggable. */
+.travel-day-slot { flex-shrink: 0; margin-right: 14px; }
+.travel-card-slot { flex-shrink: 0; margin-bottom: 12px; }
+.travel-card-list { min-height: 180px; transition: background-color 120ms ease, box-shadow 120ms ease; overflow-anchor: none; }
+.travel-drag-hint { color: var(--muted); line-height: 1.7; }
+.travel-card-drag-handle { color: var(--muted); cursor: grab; }
+.travel-card-drag-handle:hover { background: #e8ebdf; color: var(--green); }
+.travel-card-drag-handle:active { cursor: grabbing; }
+/* Clones live under body, outside animated and clipping board ancestors. */
+.travel-drag-preview { min-height: 0; background: transparent; }
 .travel-day { min-height: 460px; width: 292px; padding: 14px; border-color: #d5dacd; border-radius: var(--radius-md); background: var(--surface-muted); box-shadow: none; backdrop-filter: none; }
 .travel-day h2 { font-family: inherit; font-size: 21px; }
 .travel-day > div:first-child { border-color: #d0d5c4; }
-.travel-card { border-color: #e1e2d8; border-radius: var(--radius-sm); background: var(--surface); box-shadow: 0 2px 7px rgba(47, 69, 32, 0.04); }
-.travel-card:hover { transform: translateY(-1px); border-color: #c7d2bd; box-shadow: var(--shadow-card); }
+.travel-card { border-color: #e1e2d8; border-radius: var(--radius-sm); background: var(--surface); box-shadow: 0 2px 7px rgba(47, 69, 32, 0.04); transition: border-color 120ms ease, box-shadow 120ms ease; }
+.travel-card:not(.travel-card-dragging):hover { border-color: #c7d2bd; box-shadow: var(--shadow-card); }
+.travel-card-dragging, .travel-card-dragging:hover { transform: none; border-color: var(--green); box-shadow: 0 12px 28px rgba(47, 69, 32, .18); transition: none; }
 .travel-card h3 { color: var(--ink); }
 .travel-card-actions { opacity: 1; }
 .travel-card-actions button { color: var(--muted); }
@@ -77,6 +88,10 @@
 .travel-app :is(input, select, textarea)::placeholder { color: #858a7f; }
 .travel-app button { cursor: pointer; }
 .travel-app button:disabled { cursor: not-allowed; }
+
+@media (pointer: coarse) {
+  .travel-card-drag-handle { width: 44px; height: 44px; }
+}
 
 @media (max-width: 900px) {
   .travel-app-header { grid-template-columns: 1fr; gap: 28px; padding: 50px 0 40px; }
