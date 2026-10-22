@@ -39,6 +39,10 @@
 .travel-summary-detail { margin: 8px 0 0; color: var(--muted); font-size: 11px; line-height: 1.65; }
 
 .travel-weather-control { display: contents; }
+.travel-weather-refresh { border-color: #d9c894; background: #fbf3dc; color: #946a20; }
+.travel-weather-refresh:hover:not(:disabled) { border-color: #af8a39; background: #f5e6bd; }
+.travel-weather-refresh:focus-visible { outline: 2px solid var(--green); outline-offset: 3px; }
+.travel-weather-refresh-badge { background: #fbf3dc; color: var(--green); }
 .travel-weather-coverage { max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .travel-weather-setup { border-color: var(--line); background: var(--surface); }
 

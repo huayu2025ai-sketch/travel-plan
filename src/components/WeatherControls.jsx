@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { RefreshCw, X } from 'lucide-react';
+import { CloudSun, RefreshCw, X } from 'lucide-react';
 import { getWeatherCoverage } from '../utils/plan-weather.js';
 
 export function WeatherControls({ plan, isRefreshing, isGenerating, notice, onDestinationChange, onDateChange, onRefresh }) {
@@ -27,9 +27,12 @@ export function WeatherControls({ plan, isRefreshing, isGenerating, notice, onDe
             if (missingContext || isSetupOpen) setIsSetupOpen((open) => !open);
             else onRefresh(event);
           }}
-          className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-stone-200 bg-white text-stone-500 transition hover:border-stone-300 hover:bg-stone-50 hover:text-stone-700 disabled:opacity-50"
+          className="travel-weather-refresh relative inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border transition disabled:opacity-50"
         >
-          <RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? 'animate-spin' : ''}`} aria-hidden="true" />
+          <CloudSun className="h-5 w-5 -translate-x-0.5 -translate-y-0.5" aria-hidden="true" />
+          <span className="travel-weather-refresh-badge absolute bottom-0.5 right-0.5 inline-flex h-3.5 w-3.5 items-center justify-center rounded-full" aria-hidden="true">
+            <RefreshCw className={`h-2.5 w-2.5 ${isRefreshing ? 'animate-spin' : ''}`} strokeWidth={2.6} />
+          </span>
         </button>
         {isSetupOpen ? (
           <div role="dialog" aria-label="设置天气查询" onKeyDown={(event) => { if (event.key === 'Escape') setIsSetupOpen(false); }} className="travel-weather-setup fixed inset-x-4 top-1/3 z-30 rounded-lg border p-4 shadow-lg sm:absolute sm:inset-x-auto sm:left-0 sm:top-full sm:mt-2 sm:w-72">
