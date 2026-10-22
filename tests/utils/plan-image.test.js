@@ -63,7 +63,7 @@ describe('itinerary poster export', () => {
     }
   });
 
-  it.each([1, 2, 3])('uses one column for a %i-day trip', async (count) => {
+  it.each([1, 2])('uses one column for a %i-day trip', async (count) => {
     const itinerary = Object.fromEntries(Array.from({ length: count }, (_, i) => [`Day ${i + 1}`, [stop()]]));
     await buildPlanImageBlob(plan(itinerary));
     const headings = drawn.filter(({ text }) => /^DAY \d+$/.test(text));
@@ -72,7 +72,7 @@ describe('itinerary poster export', () => {
     expect(headings.every((heading, index) => index === 0 || heading.y > headings[index - 1].y)).toBe(true);
   });
 
-  it.each([4, 5, 6])('uses two columns in day order for a %i-day trip', async (count) => {
+  it.each([3, 4, 5, 6])('uses two columns in day order for a %i-day trip', async (count) => {
     const itinerary = Object.fromEntries(Array.from({ length: count }, (_, i) => [`Day ${i + 1}`, [stop({ title: `第${i + 1}天游览老城东西大街和鼓楼`, advice: '需提前预约，午后安排休息，然后步行游览街区。' })]]));
     await buildPlanImageBlob(plan(itinerary));
     const headings = drawn.filter(({ text }) => /^DAY \d+$/.test(text));

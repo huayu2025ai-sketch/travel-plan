@@ -108,7 +108,7 @@ function needsReservation(item) {
 function measurePoster(ctx, plan) {
   const entries = Object.entries(plan.itinerary || {});
   if (!entries.length) throw new Error('还没有可导出的行程，请先添加一天行程。');
-  const columns = entries.length > 3 ? 2 : 1;
+  const columns = entries.length >= 3 ? 2 : 1;
   const layout = columns === 2 ? DUAL_LAYOUT : LONG_LAYOUT;
 
   const title = tripTitle(plan, entries.length);
