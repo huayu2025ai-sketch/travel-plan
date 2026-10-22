@@ -8,6 +8,10 @@ export function updatePlanDayDate(plan, day, dayDateValue) {
 
 export function getPlanWeather(plan, day) {
   const context = plan.weather_context;
-  if (context && (context.start_date !== plan.start_date || context.destination !== plan.destination)) return '';
+  if (context && (context.start_date !== plan.start_date || String(context.destination).trim() !== String(plan.destination).trim())) return '';
   return plan.weather?.[day] || '';
+}
+
+export function getWeatherTripKey(plan) {
+  return JSON.stringify([String(plan.destination || '').trim(), plan.start_date, Object.keys(plan.itinerary || {})]);
 }

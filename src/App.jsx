@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { PlanSummary } from './components/PlanSummary.jsx';
+import { WeatherControls } from './components/WeatherControls.jsx';
 import { ItineraryBoard } from './components/ItineraryBoard.jsx';
 import { normalizeImportedPlan } from './utils/plan-normalize.js';
 import { buildPlanImageBlob } from './utils/plan-image.js';
@@ -19,7 +20,7 @@ import { createTemplatePlan } from './content/templates.js';
 import { clearTemplateParameter, getTemplateStart } from './utils/template-start.js';
 import { trackProductEvent } from './utils/analytics.js';
 import { preserveConcurrentPlanEdits } from './utils/plan-merge.js';
-import { updatePlanDayDate } from './utils/plan-weather.js';
+import { getWeatherTripKey, updatePlanDayDate } from './utils/plan-weather.js';
 import { buildMarkdown, saveBlobFile, saveTextFile } from './utils/export.js';
 import {
   renumberItineraryDays,
@@ -171,6 +172,9 @@ function App() {
   const planRef = useRef(plan);
   const [idea, setIdea] = useState(templateStart.applied ? '' : '我想去洛阳、开封旅游，在10月下旬，5天。预算大概多少，交通工具。');
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isRefreshingWeather, setIsRefreshingWeather] = useState(false);
+  const [weatherNotice, setWeatherNotice] = useState(null);
+  const weatherRequestRef = useRef(null);
   const [error, setError] = useState(templateStart.invalid ? '没有找到这份模板，已保留当前行程。请从模板目录重新选择。' : '');
   const [cardForm, setCardForm] = useState(createEmptyCardForm('Day 1'));
   const [pendingDeleteId, setPendingDeleteId] = useState('');
@@ -287,6 +291,7 @@ function App() {
   };
 
   const setDayDate = (day, dayDateValue) => {
+    setWeatherNotice(null);
     const nextPlan = updatePlanDayDate(plan, day, dayDateValue);
     if (nextPlan !== plan) updatePlan(() => nextPlan);
   };
@@ -376,6 +381,7 @@ function App() {
 
   const generatePlan = async (event) => {
     event.preventDefault();
+    if (weatherRequestRef.current) return;
     const trimmedIdea = idea.trim();
 
     if (!trimmedIdea) {
@@ -453,11 +459,52 @@ function App() {
     }
   };
 
+  const refreshWeather = async (event) => {
+    event.preventDefault();
+    if (weatherRequestRef.current || isGenerating) return;
+    const planAtStart = planRef.current;
+    const tripKey = getWeatherTripKey(planAtStart);
+    const controller = new AbortController();
+    weatherRequestRef.current = controller;
+    const timeout = window.setTimeout(() => controller.abort(), 45000);
+    setIsRefreshingWeather(true);
+    setWeatherNotice(null);
+    try {
+      const response = await fetch('/api/weather', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        cache: 'no-store',
+        signal: controller.signal,
+        body: JSON.stringify({ destination: planAtStart.destination, start_date: planAtStart.start_date, days: Object.keys(planAtStart.itinerary).length }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || '天气更新失败，请稍后重试。');
+      if (getWeatherTripKey(planRef.current) !== tripKey) {
+        throw new Error('行程目的地、日期或天数已变化，请按当前行程重新更新天气。');
+      }
+      updatePlan((current) => ({ ...current, weather: data.weather, weather_context: data.weather_context }), { trackEdit: false });
+      const dayCount = Object.keys(planAtStart.itinerary).length;
+      setWeatherNotice({ key: tripKey, error: false, message: data.available_days < dayCount ? `已更新 ${data.available_days}/${dayCount} 天天气，其余日期暂无预报。` : `已更新 ${dayCount} 天天气。` });
+    } catch (requestError) {
+      setWeatherNotice({ key: getWeatherTripKey(planRef.current), error: true, message: requestError.name === 'AbortError' ? '天气查询超时，请稍后重试。' : requestError instanceof SyntaxError ? '天气服务响应异常，请稍后重试。' : requestError.message === 'Failed to fetch' ? '无法连接天气服务，请检查网络后重试。' : requestError.message });
+    } finally {
+      window.clearTimeout(timeout);
+      weatherRequestRef.current = null;
+      setIsRefreshingWeather(false);
+    }
+  };
+
+  const setWeatherDestination = (destination) => {
+    setWeatherNotice(null);
+    updatePlan((current) => ({ ...current, destination, weather: {}, weather_context: null }));
+  };
+
   const updateCardForm = (field, value) => {
     setCardForm((currentForm) => ({ ...currentForm, [field]: value }));
   };
 
   const clearPlan = () => {
+    setWeatherNotice(null);
     const emptyPlan = {
       destination: '',
       start_date: '',
@@ -734,7 +781,7 @@ function App() {
             <div className="mt-3 flex gap-2">
               <button
                 type="submit"
-                disabled={isGenerating}
+                disabled={isGenerating || isRefreshingWeather}
                 className="travel-primary-action inline-flex flex-1 items-center justify-center gap-2 rounded-md bg-stone-950 px-4 py-3 text-sm font-semibold text-white transition hover:bg-stone-800 disabled:cursor-not-allowed disabled:bg-stone-500     "
               >
                 {isGenerating ? '正在生成行程' : hasAiContext ? '优化当前行程' : '生成行程草案'}
@@ -787,6 +834,16 @@ function App() {
           transport={plan.recommended_transport}
           dayCount={plannedDayCount}
           itemCount={itineraryItemCount}
+        />
+
+        <WeatherControls
+          plan={plan}
+          isRefreshing={isRefreshingWeather}
+          isGenerating={isGenerating}
+          notice={weatherNotice?.key === getWeatherTripKey(plan) ? weatherNotice : null}
+          onDestinationChange={setWeatherDestination}
+          onDateChange={(value) => setDayDate('Day 1', value)}
+          onRefresh={refreshWeather}
         />
 
         <ItineraryBoard

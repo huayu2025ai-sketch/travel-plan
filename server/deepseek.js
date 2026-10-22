@@ -232,6 +232,32 @@ function addDaysToDate(dateString, days) {
   return `${year}-${month}-${day}`;
 }
 
+export async function refreshTripWeather(value) {
+  const destination = typeof value?.destination === 'string' ? value.destination.trim() : '';
+  const startDate = typeof value?.start_date === 'string' ? value.start_date : '';
+  const days = value?.days;
+  if (!destination || destination.length > 100) {
+    throw createPublicError('请填写目的地（最多100个字符）。', 400);
+  }
+  const parsedDate = new Date(`${startDate}T00:00:00Z`);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate) || !Number.isFinite(parsedDate.getTime()) || parsedDate.toISOString().slice(0, 10) !== startDate) {
+    throw createPublicError('请填写有效的出发日期。', 400);
+  }
+  if (!Number.isInteger(days) || days < 1 || days > 16) {
+    throw createPublicError('天气同步支持1至16天行程。', 400);
+  }
+  const { weatherByDay, locationLabel } = await buildRealWeatherContext({ destination, start_date: startDate, days });
+  const availableDays = Object.values(weatherByDay).filter(Boolean).length;
+  if (!availableDays) {
+    throw createPublicError('所选日期暂无可用天气，可能超出预报范围（未来约16天）或服务暂时不可用。请临近出发或稍后重试。', 422);
+  }
+  return {
+    weather: weatherByDay,
+    weather_context: { destination, start_date: startDate, days, location_label: locationLabel, updated_at: new Date().toISOString() },
+    available_days: availableDays,
+  };
+}
+
 async function buildRealWeatherContext(tripContext) {
   const destination = String(tripContext?.destination || '').trim();
   const startDate = String(tripContext?.start_date || '').trim();
@@ -250,6 +276,9 @@ async function buildRealWeatherContext(tripContext) {
   if (process.env.QWEATHER_API_KEY) {
     try {
       location = await geocodeWithQWeather(destination);
+      if (!location) {
+        location = await geocodeDestination(destination);
+      }
       if (location) {
         forecast = await fetchQWeatherForecast(location, startDate, dayCount);
       }
@@ -301,6 +330,7 @@ async function buildRealWeatherContext(tripContext) {
 
   const locationLabel = [location.name, location.admin1, location.country].filter(Boolean).join(' · ');
   return {
+    locationLabel,
     summary: [locationLabel ? `目的地：${locationLabel}` : '', `出行日期：${startDate} 起`, ...summaryLines]
       .filter(Boolean)
       .join('\n'),
@@ -309,20 +339,26 @@ async function buildRealWeatherContext(tripContext) {
 }
 
 async function geocodeDestination(destination) {
-  const url = new URL('https://geocoding-api.open-meteo.com/v1/search');
-  url.searchParams.set('name', destination);
-  url.searchParams.set('count', '5');
-  url.searchParams.set('language', 'zh');
-  url.searchParams.set('format', 'json');
+  // GeoNames may list a major city only under its full Chinese name (e.g. 洛阳市),
+  // while the short name matches unrelated towns. Try the city name first.
+  const queries = /^\p{Script=Han}+$/u.test(destination) && !destination.endsWith('市')
+    ? [`${destination}市`, destination]
+    : [destination];
+  for (const query of queries) {
+    const url = new URL('https://geocoding-api.open-meteo.com/v1/search');
+    url.searchParams.set('name', query);
+    url.searchParams.set('count', '5');
+    url.searchParams.set('language', 'zh');
+    url.searchParams.set('format', 'json');
 
-  const response = await fetchWithTimeout(url);
-  if (!response.ok) return null;
+    const response = await fetchWithTimeout(url);
+    if (!response.ok) return null;
 
-  const payload = await response.json();
-  const results = Array.isArray(payload?.results) ? payload.results : [];
-  if (results.length === 0) return null;
-
-  return chooseBestLocation(results, destination);
+    const payload = await response.json();
+    const results = Array.isArray(payload?.results) ? payload.results : [];
+    if (results.length > 0) return chooseBestLocation(results, destination);
+  }
+  return null;
 }
 
 function chooseBestLocation(results, query) {
@@ -389,7 +425,8 @@ async function fetchDailyForecast(location, startDate, dayCount) {
 }
 
 async function geocodeWithQWeather(destination) {
-  const baseUrl = process.env.QWEATHER_GEO_URL || 'https://geoapi.qweather.com/v2';
+  const baseUrl = process.env.QWEATHER_GEO_URL;
+  if (!baseUrl) return null;
   const url = new URL(`${baseUrl}/city/lookup`);
   url.searchParams.set('key', process.env.QWEATHER_API_KEY);
   url.searchParams.set('location', destination);
@@ -413,12 +450,18 @@ async function geocodeWithQWeather(destination) {
 }
 
 async function fetchQWeatherForecast(location, startDate, dayCount) {
-  if (!location.qweatherId) return [];
+  const locationId = location.qweatherId || (
+    Number.isFinite(location.longitude) && Number.isFinite(location.latitude)
+      ? `${location.longitude},${location.latitude}`
+      : ''
+  );
+  if (!locationId) return [];
 
-  const baseUrl = process.env.QWEATHER_BASE_URL || 'https://devapi.qweather.com/v7';
+  const baseUrl = process.env.QWEATHER_BASE_URL;
+  if (!baseUrl) return [];
   const url = new URL(`${baseUrl}/weather/7d`);
   url.searchParams.set('key', process.env.QWEATHER_API_KEY);
-  url.searchParams.set('location', location.qweatherId);
+  url.searchParams.set('location', locationId);
 
   const payload = await fetchJsonWithTimeout(url, 10000);
   if (payload?.code !== '200') return [];

@@ -18,10 +18,13 @@ function getRequestUrl(input) {
 describe('generateTravelPlan', () => {
   beforeEach(() => {
     process.env.DEEPSEEK_API_KEY = 'test-api-key';
+    vi.stubEnv('QWEATHER_BASE_URL', 'https://weather-test.re.qweatherapi.com/v7');
+    vi.stubEnv('QWEATHER_GEO_URL', 'https://weather-test.re.qweatherapi.com/geo/v2');
   });
 
   afterEach(() => {
     vi.unstubAllGlobals();
+    vi.unstubAllEnvs();
     delete process.env.DEEPSEEK_API_KEY;
     delete process.env.QWEATHER_API_KEY;
   });
@@ -374,7 +377,7 @@ describe('generateTravelPlan', () => {
     });
   });
 
-  it('maps QWeather forecast records by date', async () => {
+  it.each([200, 403])('maps QWeather forecasts by date when its geocoding returns %i', async (geoStatus) => {
     process.env.QWEATHER_API_KEY = 'qweather-test-key';
     const fetchMock = vi.fn().mockImplementation(async (input, options) => {
       const url = getRequestUrl(input);
@@ -400,14 +403,23 @@ describe('generateTravelPlan', () => {
         });
       }
 
-      if (url.includes('geoapi.qweather.com')) {
+      if (url.includes('/geo/v2/city/lookup')) {
+        if (geoStatus === 403) {
+          return createJsonResponse({ error: { title: 'Security Restriction' } }, { status: 403, ok: false });
+        }
         return createJsonResponse({
           code: '200',
           location: [{ id: '101010100', name: '北京', adm1: '北京市', country: '中国', lat: '39.9042', lon: '116.4074' }],
         });
       }
 
-      if (url.includes('devapi.qweather.com')) {
+      if (url.includes('geocoding-api.open-meteo.com')) {
+        return createJsonResponse({
+          results: [{ name: '北京', admin1: '北京市', country: '中国', latitude: 39.9042, longitude: 116.4074 }],
+        });
+      }
+
+      if (url.includes('/v7/weather/7d')) {
         return createJsonResponse({
           code: '200',
           daily: [
@@ -427,7 +439,11 @@ describe('generateTravelPlan', () => {
       'Day 1': '晴 18-26°C',
       'Day 2': '小雨 20-28°C 降水2.0mm',
     });
-    expect(fetchMock.mock.calls.some(([input]) => getRequestUrl(input).includes('devapi.qweather.com'))).toBe(true);
+    const forecastCall = fetchMock.mock.calls.find(([input]) => getRequestUrl(input).includes('/v7/weather/7d'));
+    const forecastUrl = new URL(getRequestUrl(forecastCall[0]));
+    expect(forecastUrl.origin).toBe('https://weather-test.re.qweatherapi.com');
+    expect(forecastUrl.searchParams.get('location')).toBe(geoStatus === 403 ? '116.4074,39.9042' : '101010100');
+    expect(fetchMock.mock.calls.some(([input]) => getRequestUrl(input).includes('api.open-meteo.com/v1/forecast'))).toBe(false);
   });
 
   it('falls back to Open-Meteo when QWeather cannot cover the full itinerary', async () => {
@@ -451,14 +467,14 @@ describe('generateTravelPlan', () => {
         });
       }
 
-      if (url.includes('geoapi.qweather.com')) {
+      if (url.includes('/geo/v2/city/lookup')) {
         return createJsonResponse({
           code: '200',
           location: [{ id: '101010100', name: '北京', adm1: '北京市', country: '中国', lat: '39.9042', lon: '116.4074' }],
         });
       }
 
-      if (url.includes('devapi.qweather.com')) {
+      if (url.includes('/v7/weather/7d')) {
         return createJsonResponse({
           code: '200',
           daily: Array.from({ length: 7 }, (_, index) => ({

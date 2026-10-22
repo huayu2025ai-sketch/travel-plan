@@ -2,6 +2,7 @@ import 'dotenv/config';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
 import { handleGenerateRequest, sendJson } from './server/generate-handler.js';
+import { handleWeatherRequest } from './server/weather-handler.js';
 import { publicSitePlugin } from './site/vite-plugin.js';
 
 export default defineConfig({
@@ -16,6 +17,9 @@ function travelApiPlugin() {
   return {
     name: 'travel-api',
     configureServer(server) {
+      server.middlewares.use('/api/weather', (req, res) => {
+        void handleWeatherRequest(req, res);
+      });
       server.middlewares.use('/api/health', (_req, res) => {
         sendJson(res, 200, { ok: true, hasDeepSeekKey: Boolean(process.env.DEEPSEEK_API_KEY) });
       });

@@ -49,14 +49,14 @@ export function validateGenerateRequest(body) {
 }
 
 // 配额先为运行中的生成请求预留，成功后计入窗口，失败时释放预留。
-export function checkGenerateRateLimit(request) {
+export function checkGenerateRateLimit(request, { scope = 'generate', maxRequests = rateLimitMaxRequests } = {}) {
   const now = Date.now();
-  const key = getClientKey(request);
+  const key = `${scope}:${getClientKey(request)}`;
   const existing = rateLimitBuckets.get(key) || [];
   const recent = existing.filter((timestamp) => now - timestamp < rateLimitWindowMs);
 
   const pending = pendingGenerateRequests.get(key) || 0;
-  if (recent.length + pending >= rateLimitMaxRequests) {
+  if (recent.length + pending >= maxRequests) {
     return {
       allowed: false,
       retryAfterSeconds: recent.length
@@ -70,9 +70,9 @@ export function checkGenerateRateLimit(request) {
 
 // Reserve a slot before awaiting the upstream AI service, so simultaneous requests
 // cannot all pass the same check. Failed requests release their reservation.
-export function reserveGenerateRequest(request) {
-  const key = getClientKey(request);
-  const check = checkGenerateRateLimit(request);
+export function reserveGenerateRequest(request, options = {}) {
+  const key = `${options.scope || 'generate'}:${getClientKey(request)}`;
+  const check = checkGenerateRateLimit(request, options);
   if (!check.allowed) return { ...check, commit() {}, release() {} };
 
   pendingGenerateRequests.set(key, (pendingGenerateRequests.get(key) || 0) + 1);
@@ -83,15 +83,15 @@ export function reserveGenerateRequest(request) {
     const pending = pendingGenerateRequests.get(key) || 0;
     if (pending <= 1) pendingGenerateRequests.delete(key);
     else pendingGenerateRequests.set(key, pending - 1);
-    if (successful) recordGenerateHit(request);
+    if (successful) recordGenerateHit(request, options);
   };
 
   return { allowed: true, retryAfterSeconds: 0, commit: () => settle(true), release: () => settle(false) };
 }
 
-export function recordGenerateHit(request) {
+export function recordGenerateHit(request, { scope = 'generate' } = {}) {
   const now = Date.now();
-  const key = getClientKey(request);
+  const key = `${scope}:${getClientKey(request)}`;
   const existing = rateLimitBuckets.get(key) || [];
   const recent = existing.filter((timestamp) => now - timestamp < rateLimitWindowMs);
   recent.push(now);

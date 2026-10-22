@@ -11,6 +11,7 @@
 - **公开首页与 SEO 内容** — 静态产品首页、6 个行程模板、3 篇使用教程及目录，包含独立标题、摘要、canonical、分享卡片、结构化数据与站点地图
 - **一键使用模板** — 模板直接载入 `/app/` 看板；保留原本地存储，已有个人行程时先提示替换；记录模板使用、生成成功、编辑与导出事件
 - **AI 行程生成** — 使用 DeepSeek V4.1 Flash（API 模型 ID：`deepseek-flash`）抽取目的地与出行日期并生成行程；先按日期匹配和风天气 7 天预报，预报无法覆盖完整行程或服务不可用时复用已解析坐标回退到 Open-Meteo，最终生成带预算、交通、每日安排与天气的行程
+- **独立更新天气** — 在看板的「行程天气」中填写目的地和出发日期，点击「更新天气」同步每日预报，无需调用 AI 或重新生成行程；显示上次更新时间，查询失败保留旧天气，查询期间日期或目的地变化时丢弃旧结果。支持1至16天行程，具体日期需位于服务可提供的预报范围内。
 - **上下文优化** — 生成后继续输入要求即可在原草案上调整；当前行程与最近 8 条沟通记录保存在浏览器本地（每次请求携带最近 6 条），点击「清空行程」一并清除
 - **拖拽看板** — 天数横向排序、卡片跨天拖拽、同天内重新排序
 - **类型筛选** — 按交通 / 景点 / citywalk / 美食 / 酒店 / 娱乐 / 工作筛选卡片并显示各类型数量；筛选视图仅用于查看，此时拖拽排序暂停
@@ -49,8 +50,8 @@ API_PORT=8787
 # 仅在可信反向代理覆写客户端 IP 时开启；Docker Compose 已配置为 1
 TRUST_PROXY=0
 QWEATHER_API_KEY=your_qweather_api_key
-QWEATHER_BASE_URL=https://devapi.qweather.com/v7
-QWEATHER_GEO_URL=https://geoapi.qweather.com/v2
+QWEATHER_BASE_URL=https://your-api-host/v7
+QWEATHER_GEO_URL=https://your-api-host/geo/v2
 ```
 
 | 变量 | 必填 | 说明 |
@@ -60,8 +61,10 @@ QWEATHER_GEO_URL=https://geoapi.qweather.com/v2
 | `API_PORT` | 否 | 独立 Express 服务端口，默认 `8787` |
 | `TRUST_PROXY` | 否 | 设为 `1` / `true` 时才信任代理覆写的 `X-Real-IP` / `X-Forwarded-For`；Docker Compose 已配置为 `1` |
 | `QWEATHER_API_KEY` | 否 | 配置后优先使用和风天气；未配置或请求失败时自动回退到 Open-Meteo |
-| `QWEATHER_BASE_URL` | 否 | 默认 `https://devapi.qweather.com/v7` |
-| `QWEATHER_GEO_URL` | 否 | 默认 `https://geoapi.qweather.com/v2` |
+| `QWEATHER_BASE_URL` | 否 | 使用和风预报时配置为 `https://你的专属API-Host/v7`，不再使用已停用的公共域名 |
+| `QWEATHER_GEO_URL` | 否 | 和风城市查询地址：`https://你的专属API-Host/geo/v2`；未配置或不可用时通过 Open-Meteo 获取坐标，再查询和风预报 |
+
+`your-api-host` 请替换为[和风控制台](https://console.qweather.com/)分配的 API Host。城市查询路径包含 `/geo/v2`，仅替换旧域名而保留 `/v2` 无法完成迁移。和风预报不可用或不能覆盖完整行程时，仍会回退到 Open-Meteo 预报。
 
 Vite 开发模式会自动加载 `.env`；独立 Express 服务通过 `dotenv` 读取。
 

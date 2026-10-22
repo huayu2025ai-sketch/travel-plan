@@ -38,6 +38,12 @@
 .travel-summary-value strong { overflow-wrap: anywhere; color: var(--ink); font-size: 17px; font-weight: 700; line-height: 1.45; }
 .travel-summary-detail { margin: 8px 0 0; color: var(--muted); font-size: 11px; line-height: 1.65; }
 
+.travel-weather-panel { margin-top: 24px; padding: 18px 20px; border: 1px solid var(--line); border-radius: var(--radius-md); background: var(--surface); }
+.travel-weather-panel h2 { color: var(--green); }
+.travel-weather-panel label { flex-basis: 160px; color: var(--ink); }
+.travel-weather-panel input { border-color: var(--line); color: var(--ink); }
+.travel-weather-panel input:disabled { opacity: .65; }
+
 .travel-board { margin-top: 36px; padding: 24px 0 18px; border: 0; border-top: 1px solid var(--line); border-radius: 0; background: transparent; box-shadow: none; backdrop-filter: none; }
 .travel-board > div:first-child { padding: 0; }
 .travel-board h2 { color: var(--ink); font-size: 20px; font-weight: 700; }

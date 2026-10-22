@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import express from 'express';
 import { handleGenerateRequest } from './generate-handler.js';
+import { handleWeatherRequest } from './weather-handler.js';
 import { logApiError, toPublicApiError } from './request-guard.js';
 
 const app = express();
@@ -9,6 +10,8 @@ const port = Number(process.env.API_PORT || 8787);
 app.post('/api/generate', (req, res) => {
   handleGenerateRequest(req, res, { scope: 'server/api/generate' });
 });
+
+app.all('/api/weather', handleWeatherRequest);
 
 app.get('/api/health', (_req, res) => {
   res.json({ ok: true, hasDeepSeekKey: Boolean(process.env.DEEPSEEK_API_KEY) });

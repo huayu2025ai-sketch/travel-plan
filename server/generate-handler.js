@@ -45,7 +45,7 @@ export function sendJson(res, statusCode, data) {
   res.end(JSON.stringify(data));
 }
 
-async function readJsonBody(req) {
+export async function readJsonBody(req) {
   if (typeof req.body === 'string') {
     ensureRequestBodySize(Buffer.byteLength(req.body));
     return parseJsonBody(req.body);

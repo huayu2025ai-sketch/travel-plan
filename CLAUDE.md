@@ -48,10 +48,10 @@ Copy `.env.example` to `.env` and fill in:
 - `API_PORT` — port for the standalone Express server; defaults to `8787`.
 - `TRUST_PROXY` — set to `1` or `true` only when a trusted reverse proxy overwrites client IP headers; Docker Compose sets this to `1`.
 - `QWEATHER_API_KEY` — optional API key for QWeather (和风天气). When absent or unavailable, the app falls back to Open-Meteo.
-- `QWEATHER_BASE_URL` — defaults to `https://devapi.qweather.com/v7`.
-- `QWEATHER_GEO_URL` — defaults to `https://geoapi.qweather.com/v2`.
+- `QWEATHER_BASE_URL` — set to `https://your-api-host/v7` using the account's dedicated API Host; there is no shared-domain default.
+- `QWEATHER_GEO_URL` — optionally set to `https://your-api-host/geo/v2`. If absent or restricted, Open-Meteo resolves coordinates for the QWeather forecast.
 
-When `QWEATHER_API_KEY` is configured, QWeather is preferred for geocoding and forecast data. QWeather's `/weather/7d` response is matched by calendar date; if it cannot cover the complete itinerary, the app reuses the resolved coordinates and falls back to Open-Meteo. If the key is missing or a QWeather request fails, the app geocodes with Open-Meteo and uses its daily forecast for the trip range.
+When `QWEATHER_API_KEY` and `QWEATHER_BASE_URL` are configured, QWeather is preferred for forecast data. Geocoding first tries `QWEATHER_GEO_URL`, then Open-Meteo; QWeather accepts either a city ID or longitude/latitude coordinates. QWeather's `/weather/7d` response is matched by calendar date; if it cannot cover the complete itinerary or the forecast request fails, the app reuses the resolved coordinates and falls back to Open-Meteo. The legacy shared API domains are discontinued; GeoAPI uses `/geo/v2` on the dedicated Host.
 
 Vite loads `.env` automatically in dev mode. The standalone server relies on `dotenv`.
 
@@ -91,7 +91,7 @@ This is a React + Vite frontend with a small Node.js API layer. `src/main.jsx` o
 
 `normalizePlan(parsed, weatherByDay, tripContext)` validates the AI output, fixes malformed card IDs, coerces unknown card types to `景点`, deduplicates IDs, and aligns `weather` keys with `itinerary` days.
 
-DeepSeek calls retry once on 5xx and have a 60-second timeout per attempt. QWeather calls use a 10-second timeout; Open-Meteo calls currently do not have an explicit timeout.
+DeepSeek calls retry once on 5xx and have a 60-second timeout per attempt. QWeather and Open-Meteo calls use a 10-second timeout.
 
 ### API surfaces
 
@@ -102,6 +102,8 @@ The shared `handleGenerateRequest` transport flow is exposed through three deplo
 - `api/generate.js` and `api/health.js` — Vercel serverless function handlers.
 
 The full `/api/generate` pipeline (body reading, rate limiting, validation, generation, error shaping) lives in the shared `server/generate-handler.js`, which all three surfaces call. Keep the surfaces limited to transport glue so they cannot drift apart.
+
+`POST /api/weather` uses `server/weather-handler.js` on all three surfaces to refresh weather independently of AI generation. It takes `{ destination, start_date, days }` (1–16 days), returns `{ weather, weather_context, available_days }`, and includes an ISO `updated_at` timestamp in `weather_context`. Responses use `Cache-Control: no-store`. Weather requests have a separate process-local quota of 30 attempts per 10 minutes per client address, including failures. The frontend preserves itinerary edits, retains old forecasts after refresh failure, and discards results if the destination, date or day count changed during the request.
 
 ### Request protection
 

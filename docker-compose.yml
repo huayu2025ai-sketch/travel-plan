@@ -15,8 +15,8 @@ services:
       - DEEPSEEK_API_KEY=${DEEPSEEK_API_KEY:?DEEPSEEK_API_KEY must be set}
       - DEEPSEEK_BASE_URL=${DEEPSEEK_BASE_URL:-https://api.deepseek.com}
       - QWEATHER_API_KEY=${QWEATHER_API_KEY:-}
-      - QWEATHER_BASE_URL=${QWEATHER_BASE_URL:-https://devapi.qweather.com/v7}
-      - QWEATHER_GEO_URL=${QWEATHER_GEO_URL:-https://geoapi.qweather.com/v2}
+      - QWEATHER_BASE_URL=${QWEATHER_BASE_URL:-}
+      - QWEATHER_GEO_URL=${QWEATHER_GEO_URL:-}
     networks:
       - npm-network
     healthcheck:
