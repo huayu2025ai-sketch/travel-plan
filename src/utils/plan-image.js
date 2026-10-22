@@ -1,4 +1,5 @@
 import { getDayDateInfo } from './date.js';
+import { PLAN_SITE_QR_ROWS } from '../content/site-qr.js';
 
 const WIDTH = 900;
 const SANS = '"PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif';
@@ -8,6 +9,18 @@ const RED = '#bf4b3e';
 const GREEN = '#315f4d';
 const TEXT_X = 246;
 const TEXT_WIDTH = 570;
+const HEADER_WIDTH = 500;
+const HEADER_CENTER_X = 464;
+const LONG_LAYOUT = {
+  cardWidth: 820, headerHeight: 60, contentTop: 76, tagWidth: 218,
+  daySize: 44, dateSize: 32, dateX: 286, textX: TEXT_X, textWidth: TEXT_WIDTH,
+  iconX: 157, titleSize: 32, titleLine: 40, detailSize: 23, detailLine: 30, rowMin: 86,
+};
+const DUAL_LAYOUT = {
+  cardWidth: 398, headerHeight: 52, contentTop: 68, tagWidth: 120,
+  daySize: 30, dateSize: 22, dateX: 180, textX: 124, textWidth: 294,
+  iconX: 82, titleSize: 28, titleLine: 36, detailSize: 22, detailLine: 28, rowMin: 78,
+};
 
 // Local vector artwork keeps exports sharp and independent of external image services.
 const ICONS = {
@@ -41,12 +54,17 @@ function wrapText(ctx, value, maxWidth) {
   const lines = [];
   for (const paragraph of String(value || '').split(/\r?\n/)) {
     let line = '';
-    for (const character of paragraph) {
-      if (line && ctx.measureText(line + character).width > maxWidth) {
-        lines.push(line.trimEnd());
-        line = '';
+    // Keep times and numbers together, and punctuation with its preceding text.
+    const tokens = paragraph.match(/[（《「『【“‘(]*(?:[A-Za-z0-9]+(?:[.:/–—-][A-Za-z0-9]+)*|.)[，。！？；：、）》」』】”’…,.!?;:%)]*/gu) || [];
+    for (const token of tokens) {
+      const parts = ctx.measureText(token).width > maxWidth ? [...token] : [token];
+      for (const part of parts) {
+        if (line && ctx.measureText(line + part).width > maxWidth) {
+          lines.push(line.trimEnd());
+          line = '';
+        }
+        line += part;
       }
-      line += character;
     }
     lines.push(line.trimEnd());
   }
@@ -90,39 +108,41 @@ function needsReservation(item) {
 function measurePoster(ctx, plan) {
   const entries = Object.entries(plan.itinerary || {});
   if (!entries.length) throw new Error('还没有可导出的行程，请先添加一天行程。');
+  const columns = entries.length > 3 ? 2 : 1;
+  const layout = columns === 2 ? DUAL_LAYOUT : LONG_LAYOUT;
 
   const title = tripTitle(plan, entries.length);
   let titleSize = 66;
   font(ctx, titleSize, 900, SERIF);
-  while (ctx.measureText(title).width > 664 && titleSize > 46) {
+  while (ctx.measureText(title).width > HEADER_WIDTH && titleSize > 46) {
     titleSize -= 2;
     font(ctx, titleSize, 900, SERIF);
   }
-  const titleLines = wrapText(ctx, title, 664);
+  const titleLines = wrapText(ctx, title, HEADER_WIDTH);
   const titleHeight = titleLines.length * (titleSize + 10);
   const dateY = 34 + titleHeight + 26;
   font(ctx, 23, 600);
   const summary = String(plan.recommended_transport || '').trim();
-  const summaryLines = summary ? wrapText(ctx, summary, 748) : [];
+  const summaryLines = summary ? wrapText(ctx, summary, HEADER_WIDTH - 48) : [];
   const summaryY = dateY + 18;
   const summaryHeight = summaryLines.length ? summaryLines.length * 30 + 14 : 0;
-  let y = summaryY + summaryHeight + 22;
+  let y = Math.max(220, summaryY + summaryHeight + 22);
 
   const days = entries.map(([day, items], dayIndex) => {
     const top = y;
-    y += 76;
+    y += layout.contentTop;
     const rows = (items || []).map((item) => {
       const reservation = needsReservation(item);
-      font(ctx, 32, 800);
-      const titleLines = wrapText(ctx, item.title || '未命名行程', TEXT_WIDTH);
+      font(ctx, layout.titleSize, 800);
+      const titleLines = wrapText(ctx, item.title || '未命名行程', layout.textWidth);
       const lastTitleWidth = ctx.measureText(titleLines.at(-1)).width;
-      const badgeOwnLine = reservation && lastTitleWidth + 114 > TEXT_WIDTH;
-      const titleHeight = titleLines.length * 40;
+      const badgeOwnLine = reservation && lastTitleWidth + 114 > layout.textWidth;
+      const titleHeight = titleLines.length * layout.titleLine;
       const detail = [item.duration, item.advice].filter(Boolean).join(' · ');
-      font(ctx, 23);
-      const detailLines = detail ? wrapText(ctx, detail, TEXT_WIDTH) : [];
+      font(ctx, layout.detailSize);
+      const detailLines = detail ? wrapText(ctx, detail, layout.textWidth) : [];
       const detailOffset = titleHeight + (badgeOwnLine ? 40 : 0) + 2;
-      const height = Math.max(86, detailOffset + detailLines.length * 30 + 24);
+      const height = Math.max(layout.rowMin, detailOffset + detailLines.length * layout.detailLine + 24);
       const row = { item, y, titleLines, titleHeight, detailLines, detailOffset, reservation, badgeOwnLine, lastTitleWidth, height };
       y += height;
       return row;
@@ -131,10 +151,41 @@ function measurePoster(ctx, plan) {
     y += 4;
     const height = y - top;
     y += 16;
-    return { label: `DAY ${dayIndex + 1}`, date: dayDate(plan, day), top, height, rows, color: dayIndex % 2 ? GREEN : RED };
+    return { label: `DAY ${dayIndex + 1}`, date: dayDate(plan, day), top, height, rows, layout, color: dayIndex % 2 ? GREEN : RED };
   });
 
-  return { titleLines, titleSize, dateY, date: dateRange(plan, entries.length), summaryLines, summaryY, summaryHeight, days, height: y + 20 };
+  // Read down the left column first, then the right; keep the day counts balanced.
+  const columnStart = days[0].top;
+  const columnY = [columnStart, columnStart];
+  const daysPerColumn = Math.ceil(days.length / columns);
+  const positionedDays = days.map((day, index) => {
+    const column = Math.floor(index / daysPerColumn);
+    const top = columnY[column];
+    const offsetY = top - day.top;
+    columnY[column] += day.height + 16;
+    return { ...day, top, x: column * (layout.cardWidth + 24), rows: day.rows.map((row) => ({ ...row, y: row.y + offsetY })) };
+  });
+  return { titleLines, titleSize, dateY, date: dateRange(plan, entries.length), summaryLines, summaryY, summaryHeight, days: positionedDays, height: Math.max(...columnY.slice(0, columns)) + 20 };
+}
+
+function drawSiteQr(ctx) {
+  const x = 40;
+  const y = 26;
+  const cell = 4;
+  const size = PLAN_SITE_QR_ROWS.length * cell;
+  ctx.save();
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(x, y, size, size);
+  ctx.fillStyle = INK;
+  PLAN_SITE_QR_ROWS.forEach((row, rowIndex) => {
+    [...row].forEach((module, columnIndex) => {
+      if (module === '1') ctx.fillRect(x + columnIndex * cell, y + rowIndex * cell, cell, cell);
+    });
+  });
+  ctx.textAlign = 'center';
+  font(ctx, 16, 600);
+  ctx.fillText('扫码规划行程', x + size / 2, y + size + 18);
+  ctx.restore();
 }
 
 function drawPavilion(ctx) {
@@ -159,15 +210,19 @@ function drawPavilion(ctx) {
   ctx.restore();
 }
 
-function drawIcon(ctx, type, y, index) {
+function drawIcon(ctx, type, y, index, layout) {
+  const x = layout.iconX;
+  const compact = layout.cardWidth < 820;
+  const scale = compact ? 1.45 : 2.15;
+  const centerY = y + (compact ? 24 : 30);
   const isRed = index % 2 === 1;
   ctx.fillStyle = isRed ? RED : '#dce4d7';
   ctx.beginPath();
-  ctx.ellipse(157, y + 30, 38, 30, 0, 0, Math.PI * 2);
+  ctx.ellipse(x, centerY, compact ? 26 : 38, compact ? 22 : 30, 0, 0, Math.PI * 2);
   ctx.fill();
   ctx.save();
-  ctx.translate(131, y + 4);
-  ctx.scale(2.15, 2.15);
+  ctx.translate(x - 12 * scale, centerY - 12 * scale);
+  ctx.scale(scale, scale);
   ctx.strokeStyle = isRed ? '#fffaf1' : GREEN;
   ctx.lineWidth = 1.65;
   ctx.lineCap = 'round';
@@ -177,57 +232,57 @@ function drawIcon(ctx, type, y, index) {
 }
 
 function drawDay(ctx, day) {
-  const { top, height, color } = day;
-  roundRect(ctx, 40, top, 820, height, 20);
+  const { top, height, color, layout } = day;
+  roundRect(ctx, 40, top, layout.cardWidth, height, 20);
   ctx.fillStyle = '#fffdf7';
   ctx.fill();
   ctx.save();
   ctx.clip();
   ctx.fillStyle = color === RED ? '#f4e1d9' : '#e5e9dd';
-  ctx.fillRect(40, top, 820, 60);
+  ctx.fillRect(40, top, layout.cardWidth, layout.headerHeight);
   ctx.restore();
   ctx.strokeStyle = color === RED ? '#e7bdb0' : '#c8d4c1';
   ctx.lineWidth = 1.5;
-  roundRect(ctx, 40, top, 820, height, 20);
+  roundRect(ctx, 40, top, layout.cardWidth, height, 20);
   ctx.stroke();
 
-  roundRect(ctx, 45, top + 1, 218, 58, 14);
+  roundRect(ctx, 45, top + 1, layout.tagWidth, layout.headerHeight - 2, 14);
   ctx.fillStyle = color;
   ctx.fill();
   ctx.fillStyle = '#fffcf4';
-  font(ctx, 44, 800, SERIF);
-  ctx.fillText(day.label, 76, top + 44);
+  font(ctx, layout.daySize, 800, SERIF);
+  ctx.fillText(day.label, layout.cardWidth < 820 ? 54 : 76, top + layout.headerHeight - 16);
   ctx.fillStyle = INK;
-  font(ctx, 32, 800, SERIF);
-  ctx.fillText(day.date, 286, top + 43);
+  font(ctx, layout.dateSize, 800, SERIF);
+  ctx.fillText(day.date, layout.dateX, top + layout.headerHeight - 17);
 
   if (!day.rows.length) {
     ctx.fillStyle = '#8b9187';
-    font(ctx, 25);
-    ctx.fillText('自由安排 · 暂无行程', TEXT_X, top + 120);
+    font(ctx, layout.cardWidth < 820 ? 22 : 25);
+    ctx.fillText('自由安排 · 暂无行程', layout.textX, top + 120);
   }
   day.rows.forEach((row, index) => {
     const { item, y } = row;
-    drawIcon(ctx, item.type, y, index);
+    drawIcon(ctx, item.type, y, index, layout);
     if (index < day.rows.length - 1) {
-      const arrowTop = y + 65;
+      const arrowTop = y + (layout.cardWidth < 820 ? 49 : 65);
       const arrowBottom = y + row.height - 8;
       ctx.strokeStyle = '#556058';
       ctx.lineWidth = 2.4;
       ctx.beginPath();
-      ctx.moveTo(157, arrowTop);
-      ctx.lineTo(157, arrowBottom);
-      ctx.moveTo(152, arrowBottom - 6);
-      ctx.lineTo(157, arrowBottom);
-      ctx.lineTo(162, arrowBottom - 6);
+      ctx.moveTo(layout.iconX, arrowTop);
+      ctx.lineTo(layout.iconX, arrowBottom);
+      ctx.moveTo(layout.iconX - 5, arrowBottom - 6);
+      ctx.lineTo(layout.iconX, arrowBottom);
+      ctx.lineTo(layout.iconX + 5, arrowBottom - 6);
       ctx.stroke();
     }
     ctx.fillStyle = INK;
-    font(ctx, 32, 800);
-    drawLines(ctx, row.titleLines, TEXT_X, y + 29, 40);
+    font(ctx, layout.titleSize, 800);
+    drawLines(ctx, row.titleLines, layout.textX, y + 29, layout.titleLine);
     if (row.reservation) {
-      const badgeX = row.badgeOwnLine ? TEXT_X : TEXT_X + row.lastTitleWidth + 14;
-      const badgeY = y + row.titleHeight - 40 + (row.badgeOwnLine ? 40 : 0);
+      const badgeX = row.badgeOwnLine ? layout.textX : layout.textX + row.lastTitleWidth + 14;
+      const badgeY = y + row.titleHeight - layout.titleLine + (row.badgeOwnLine ? 40 : 0);
       roundRect(ctx, badgeX, badgeY, 96, 34, 8);
       ctx.fillStyle = '#c53e43';
       ctx.fill();
@@ -236,8 +291,8 @@ function drawDay(ctx, day) {
       ctx.fillText('需预约', badgeX + 13, badgeY + 25);
     }
     ctx.fillStyle = '#505a60';
-    font(ctx, 23);
-    drawLines(ctx, row.detailLines, TEXT_X, y + row.detailOffset + 20, 30);
+    font(ctx, layout.detailSize);
+    drawLines(ctx, row.detailLines, layout.textX, y + row.detailOffset + 20, layout.detailLine);
   });
 }
 
@@ -250,38 +305,52 @@ function canvasToBlob(canvas) {
   });
 }
 
-export async function buildPlanImageBlob(plan) {
-  if (document.fonts?.ready) await document.fonts.ready;
-  const canvas = document.createElement('canvas');
-  const ctx = canvas.getContext('2d');
-  if (!ctx) throw new Error('当前浏览器不支持图片导出，请换一个浏览器重试。');
-  const poster = measurePoster(ctx, plan);
-  // Typical exports are 1800px wide. Cap the bitmap for mobile canvas limits.
-  const scale = Math.min(2, 16384 / poster.height, Math.sqrt(16_000_000 / (WIDTH * poster.height)));
-  if (scale < 1) throw new Error('行程内容太长，无法导出为清晰长图，请减少内容后重试。');
+function renderPoster(canvas, ctx, poster, scale) {
   canvas.width = Math.round(WIDTH * scale);
   canvas.height = Math.ceil(poster.height * scale);
   ctx.scale(scale, scale);
   ctx.fillStyle = '#fcfaf3';
   ctx.fillRect(0, 0, WIDTH, poster.height);
   ctx.textBaseline = 'alphabetic';
+  drawSiteQr(ctx);
   drawPavilion(ctx);
   ctx.fillStyle = INK;
   font(ctx, poster.titleSize, 900, SERIF);
   ctx.textAlign = 'center';
-  drawLines(ctx, poster.titleLines, 390, 34 + poster.titleSize, poster.titleSize + 10);
+  drawLines(ctx, poster.titleLines, HEADER_CENTER_X, 34 + poster.titleSize, poster.titleSize + 10);
   font(ctx, 30, 700, SERIF);
-  ctx.fillText(poster.date, WIDTH / 2, poster.dateY);
+  ctx.fillText(poster.date, HEADER_CENTER_X, poster.dateY);
   if (poster.summaryLines.length) {
     font(ctx, 23, 600);
     const chipWidth = Math.max(...poster.summaryLines.map((line) => ctx.measureText(line).width)) + 48;
-    roundRect(ctx, (WIDTH - chipWidth) / 2, poster.summaryY, chipWidth, poster.summaryHeight, 20);
+    roundRect(ctx, HEADER_CENTER_X - chipWidth / 2, poster.summaryY, chipWidth, poster.summaryHeight, 20);
     ctx.fillStyle = '#edebdc';
     ctx.fill();
     ctx.fillStyle = INK;
-    drawLines(ctx, poster.summaryLines, WIDTH / 2, poster.summaryY + 29, 30);
+    drawLines(ctx, poster.summaryLines, HEADER_CENTER_X, poster.summaryY + 29, 30);
   }
   ctx.textAlign = 'left';
-  poster.days.forEach((day) => drawDay(ctx, day));
+  poster.days.forEach((day) => {
+    ctx.save();
+    ctx.translate(day.x, 0);
+    drawDay(ctx, day);
+    ctx.restore();
+  });
   return canvasToBlob(canvas);
+}
+
+function createCanvas() {
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('当前浏览器不支持图片导出，请换一个浏览器重试。');
+  return { canvas, ctx };
+}
+
+export async function buildPlanImageBlob(plan) {
+  if (document.fonts?.ready) await document.fonts.ready;
+  const { canvas, ctx } = createCanvas();
+  const poster = measurePoster(ctx, plan);
+  const scale = Math.min(2, 16384 / poster.height, Math.sqrt(16_000_000 / (WIDTH * poster.height)));
+  if (scale < 1) throw new Error('行程内容太长，无法导出为清晰长图，请减少内容后重试。');
+  return renderPoster(canvas, ctx, poster, scale);
 }

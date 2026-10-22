@@ -16,9 +16,14 @@ beforeEach(() => {
       const size = Number(this.font.match(/(\d+)px/)?.[1] || 23);
       return { width: [...text].reduce((width, char) => width + size * (/[^\x00-\xff]/.test(char) ? 1 : 0.55), 0) };
     },
-    fillText(text, x, y) { drawn.push({ text, x, y, width: this.measureText(text).width, align: this.textAlign }); },
+    offsetX: 0,
+    fillText(text, x, y) { drawn.push({ text, x: x + this.offsetX, y, width: this.measureText(text).width, align: this.textAlign }); },
   };
   for (const method of ['beginPath', 'moveTo', 'arcTo', 'closePath', 'fill', 'save', 'restore', 'clip', 'fillRect', 'stroke', 'arc', 'lineTo', 'translate', 'scale', 'ellipse']) ctx[method] = vi.fn();
+  const stack = [];
+  ctx.save = vi.fn(() => stack.push({ offsetX: ctx.offsetX, font: ctx.font, textAlign: ctx.textAlign }));
+  ctx.restore = vi.fn(() => Object.assign(ctx, stack.pop()));
+  ctx.translate = vi.fn((x) => { ctx.offsetX += x; });
   canvas = { getContext: () => ctx, toBlob: vi.fn((callback) => callback(new Blob(['png'], { type: 'image/png' }))) };
   const createElement = document.createElement.bind(document);
   vi.spyOn(document, 'createElement').mockImplementation((tag) => tag === 'canvas' ? canvas : createElement(tag));
@@ -56,6 +61,56 @@ describe('itinerary poster export', () => {
       const right = text.align === 'center' ? text.x + text.width / 2 : text.x + text.width;
       expect(right).toBeLessThanOrEqual(860);
     }
+  });
+
+  it.each([1, 2, 3])('uses one column for a %i-day trip', async (count) => {
+    const itinerary = Object.fromEntries(Array.from({ length: count }, (_, i) => [`Day ${i + 1}`, [stop()]]));
+    await buildPlanImageBlob(plan(itinerary));
+    const headings = drawn.filter(({ text }) => /^DAY \d+$/.test(text));
+    expect(headings).toHaveLength(count);
+    expect(new Set(headings.map(({ x }) => x)).size).toBe(1);
+    expect(headings.every((heading, index) => index === 0 || heading.y > headings[index - 1].y)).toBe(true);
+  });
+
+  it.each([4, 5, 6])('uses two columns in day order for a %i-day trip', async (count) => {
+    const itinerary = Object.fromEntries(Array.from({ length: count }, (_, i) => [`Day ${i + 1}`, [stop({ title: `第${i + 1}天游览老城东西大街和鼓楼`, advice: '需提前预约，午后安排休息，然后步行游览街区。' })]]));
+    await buildPlanImageBlob(plan(itinerary));
+    const headings = drawn.filter(({ text }) => /^DAY \d+$/.test(text));
+    const split = Math.ceil(count / 2);
+    expect(headings.map(({ text }) => text)).toEqual(Array.from({ length: count }, (_, i) => `DAY ${i + 1}`));
+    expect(new Set(headings.map(({ x }) => x)).size).toBe(2);
+    expect(headings[split].x).toBeGreaterThan(headings[0].x);
+    expect(headings[split].y).toBe(headings[0].y);
+    for (const text of drawn) {
+      const right = text.align === 'center' ? text.x + text.width / 2 : text.x + text.width;
+      expect(right).toBeLessThanOrEqual(860);
+      expect(text.y).toBeLessThan(canvas.height / (canvas.width / 900));
+    }
+    expect(texts().join('')).toContain('需提前预约，午后安排休息，然后步行游览街区。');
+  });
+
+  it('keeps times together and avoids punctuation at the start of a wrapped line', async () => {
+    const advice = '小吃分量不小，适合多人分食，避开最拥挤的19:00。';
+    const itinerary = Object.fromEntries(Array.from({ length: 4 }, (_, i) => [`Day ${i + 1}`, [stop({ advice })]]));
+    await buildPlanImageBlob(plan(itinerary));
+    expect(texts().filter((text) => text.includes('19:00'))).toHaveLength(4);
+    expect(texts().some((text) => /^[，。！？；：、）]/.test(text))).toBe(false);
+  });
+
+  it('keeps long headings and transport text clear of the QR code and illustration', async () => {
+    await buildPlanImageBlob({
+      ...plan({ 'Day 1': [] }),
+      destination: '洛阳、开封、郑州和安阳古城深度旅行',
+      recommended_transport: '高铁、城际铁路、市内公共交通和步行，结合沿途休息与行李寄存安排',
+    });
+    const firstDayIndex = drawn.findIndex(({ text }) => text === 'DAY 1');
+    const header = drawn.slice(1, firstDayIndex); // The first label is under the QR code.
+    expect(drawn[0].text).toBe('扫码规划行程');
+    for (const text of header) {
+      expect(text.x - text.width / 2).toBeGreaterThanOrEqual(214);
+      expect(text.x + text.width / 2).toBeLessThanOrEqual(714);
+    }
+    expect(drawn[firstDayIndex].y).toBeGreaterThanOrEqual(264);
   });
 
   it.each(['无需预约。', '无需提前预约。', '不需要提前预约。', '不需要预约。', '先确认是否预约。', '请核实是否需要提前预约。', '建议提前预约。', '查询景区预约信息。'])('does not invent a booking requirement: %s', async (advice) => {
