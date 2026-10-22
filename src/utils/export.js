@@ -1,4 +1,5 @@
 import { getDayDateInfo } from './date.js';
+import { getPlanWeather, getWeatherCoverage } from './plan-weather.js';
 
 export function downloadBlobFile(blob, filename) {
   const url = URL.createObjectURL(blob);
@@ -40,15 +41,25 @@ export function buildMarkdown(plan) {
   const lines = [
     '# AI 旅行规划',
     '',
+    `- 目的地：${plan.destination || '待定'}`,
     `- 预算预估：${plan.total_budget_estimate}`,
     `- 推荐交通：${plan.recommended_transport}`,
     '',
   ];
 
+  const coverage = getWeatherCoverage(plan);
+  if (coverage) {
+    lines.push(`- 天气获取范围：${coverage.start_date}～${coverage.end_date} · ${coverage.location_label}`);
+    if (coverage.updated_at) lines.push(`- 天气更新时间：${coverage.updated_at}`);
+    lines.push('');
+  }
+
   Object.entries(plan.itinerary).forEach(([day, items]) => {
     const dateInfo = getDayDateInfo(plan.start_date, day);
     const dayHeading = dateInfo.displayText ? `${day}（${dateInfo.displayText}）` : day;
     lines.push(`## ${dayHeading}`, '');
+    const weather = getPlanWeather(plan, day);
+    if (weather) lines.push(`- 天气：${weather}`, '');
 
     if (items.length === 0) {
       lines.push('- 暂无行程', '');

@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { PlanSummary } from './components/PlanSummary.jsx';
-import { WeatherControls } from './components/WeatherControls.jsx';
 import { ItineraryBoard } from './components/ItineraryBoard.jsx';
 import { normalizeImportedPlan } from './utils/plan-normalize.js';
 import { buildPlanImageBlob } from './utils/plan-image.js';
@@ -702,6 +701,7 @@ function App() {
       const content = await file.text();
       const importedPlan = normalizeImportedPlan(JSON.parse(content));
       updatePlan(() => importedPlan, { trackEdit: false });
+      setWeatherNotice(null);
       setCardForm(createEmptyCardForm(Object.keys(importedPlan.itinerary)[0]));
       setPendingDeleteId('');
       setEditingCardId('');
@@ -836,17 +836,15 @@ function App() {
           itemCount={itineraryItemCount}
         />
 
-        <WeatherControls
-          plan={plan}
-          isRefreshing={isRefreshingWeather}
-          isGenerating={isGenerating}
-          notice={weatherNotice?.key === getWeatherTripKey(plan) ? weatherNotice : null}
-          onDestinationChange={setWeatherDestination}
-          onDateChange={(value) => setDayDate('Day 1', value)}
-          onRefresh={refreshWeather}
-        />
-
         <ItineraryBoard
+          weatherControls={{
+            isRefreshing: isRefreshingWeather,
+            isGenerating,
+            notice: weatherNotice?.key === getWeatherTripKey(plan) ? weatherNotice : null,
+            onDestinationChange: setWeatherDestination,
+            onDateChange: (value) => setDayDate('Day 1', value),
+            onRefresh: refreshWeather,
+          }}
           isBoardCollapsed={isBoardCollapsed}
           setIsBoardCollapsed={setIsBoardCollapsed}
           addDay={addDay}

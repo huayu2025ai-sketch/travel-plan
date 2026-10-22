@@ -116,10 +116,17 @@ describe('App key interactions', () => {
 
   it('requires a destination and date before updating weather', () => {
     render(<App />);
-    expect(screen.getByRole('button', { name: '更新天气' }).disabled).toBe(true);
+    const refresh = screen.getByRole('button', { name: '更新天气' });
+    expect(screen.getByRole('button', { name: '收起每日行程看板' }).nextElementSibling.contains(refresh)).toBe(true);
+    expect(screen.queryByLabelText('目的地')).toBeNull();
+    fireEvent.click(refresh);
+    expect(screen.getByRole('dialog', { name: '设置天气查询' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: '获取天气' }).disabled).toBe(true);
     fireEvent.change(screen.getByLabelText('目的地'), { target: { value: '杭州' } });
     fireEvent.change(screen.getByLabelText('出发日期'), { target: { value: '2026-10-23' } });
-    expect(screen.getByRole('button', { name: '更新天气' }).disabled).toBe(false);
+    expect(screen.getByRole('button', { name: '获取天气' }).disabled).toBe(false);
+    fireEvent.keyDown(screen.getByRole('dialog'), { key: 'Escape' });
+    expect(screen.queryByRole('dialog')).toBeNull();
   });
 
   it('refreshes only weather, preserves edits made during the query and persists its timestamp', async () => {
@@ -139,14 +146,29 @@ describe('App key interactions', () => {
     await act(async () => resolveFetch(weatherResponse()));
 
     expect(screen.getByText('已更新 2 天天气。')).toBeTruthy();
+    expect(screen.getByText('2026-10-23～2026-10-24 · 杭州')).toBeTruthy();
     expect(screen.getByText('晴 15-22°C')).toBeTruthy();
     expect(screen.getByText('查询时新增的景点')).toBeTruthy();
-    expect(screen.getByText(/上次更新/)).toBeTruthy();
+    expect(screen.getByTitle(/上次更新/)).toBeTruthy();
     view.unmount();
     render(<App />);
     expect(screen.getByText('晴 15-22°C')).toBeTruthy();
-    expect(screen.getByText(/上次更新/)).toBeTruthy();
+    expect(screen.getByTitle(/上次更新/)).toBeTruthy();
     expect(screen.getByText('查询时新增的景点')).toBeTruthy();
+  });
+
+  it('queries weather from the compact setup when the trip has no date or destination', async () => {
+    const fetchMock = vi.fn(async () => weatherResponse());
+    vi.stubGlobal('fetch', fetchMock);
+    render(<App />);
+    fireEvent.click(screen.getByRole('button', { name: '更新天气' }));
+    fireEvent.change(screen.getByLabelText('目的地'), { target: { value: '杭州' } });
+    fireEvent.change(screen.getByLabelText('出发日期'), { target: { value: '2026-10-23' } });
+    fireEvent.click(screen.getByRole('button', { name: '获取天气' }));
+    expect(await screen.findByText('已更新 2/5 天天气，其余日期暂无预报。')).toBeTruthy();
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toEqual({ destination: '杭州', start_date: '2026-10-23', days: 5 });
+    expect(screen.getByText('2026-10-23～2026-10-24 · 杭州')).toBeTruthy();
   });
 
   it('keeps the previous forecast and timestamp when a refresh fails', async () => {
@@ -156,8 +178,25 @@ describe('App key interactions', () => {
     fireEvent.click(screen.getByRole('button', { name: '更新天气' }));
     expect(await screen.findByRole('alert')).toHaveProperty('textContent', '所选日期暂无可用天气，请稍后重试。');
     expect(screen.getByText('旧天气')).toBeTruthy();
-    expect(screen.getByText(/上次更新/)).toBeTruthy();
+    expect(screen.getByTitle(/上次更新/)).toBeTruthy();
     expect(screen.getByRole('button', { name: '更新天气' }).disabled).toBe(false);
+  });
+
+  it('restores weather, coverage and dates when importing a JSON backup', async () => {
+    render(<App />);
+    const data = weatherResponseData();
+    const imported = {
+      destination: '杭州', start_date: '2026-10-23',
+      itinerary: { 'Day 3': [], 'Day 9': [] },
+      weather: { 'Day 3': data.weather['Day 1'], 'Day 9': data.weather['Day 2'] },
+      weather_context: { ...data.weather_context, location_label: '杭州市 浙江省 中国' },
+    };
+    await act(async () => fireEvent.change(screen.getByLabelText('导入JSON'), { target: { files: [{ text: async () => JSON.stringify(imported) }] } }));
+    expect(screen.getByText('晴 15-22°C')).toBeTruthy();
+    expect(screen.getByText('阴 16-23°C')).toBeTruthy();
+    expect(screen.getByText('2026-10-23～2026-10-24 · 杭州市 浙江省 中国')).toBeTruthy();
+    expect(screen.getByLabelText('设置 Day 2 日期').value).toBe('2026-10-24');
+    expect(screen.getByTitle(/上次更新/)).toBeTruthy();
   });
 
   it.each(['date', 'destination', 'days'])('discards weather if the trip %s changes during the request', async (field) => {
@@ -166,13 +205,17 @@ describe('App key interactions', () => {
     vi.stubGlobal('fetch', vi.fn(() => new Promise((resolve) => { resolveFetch = resolve; })));
     render(<App />);
     fireEvent.click(screen.getByRole('button', { name: '更新天气' }));
-    if (field === 'date') fireEvent.change(screen.getByLabelText('出发日期'), { target: { value: '2026-10-24' } });
-    else if (field === 'destination') fireEvent.change(screen.getByLabelText('目的地'), { target: { value: '北京' } });
+    if (field === 'date') fireEvent.change(screen.getByLabelText('设置 Day 1 日期'), { target: { value: '2026-10-24' } });
+    else if (field === 'destination') {
+      const imported = JSON.parse(localStorage.getItem('travel-plan-board-v1'));
+      imported.destination = '北京';
+      await act(async () => fireEvent.change(screen.getByLabelText('导入JSON'), { target: { files: [{ text: async () => JSON.stringify(imported) }] } }));
+    }
     else fireEvent.click(screen.getByRole('button', { name: '添加天数' }));
     await act(async () => resolveFetch(weatherResponse()));
     expect(screen.getByRole('alert').textContent).toContain('已变化');
     expect(screen.queryByText('晴 15-22°C')).toBeNull();
-    expect(screen.queryByText(/上次更新/)).toBeNull();
+    expect(screen.queryByTitle(/上次更新/)).toBeNull();
   });
 });
 

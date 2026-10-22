@@ -46,20 +46,36 @@ export function normalizeImportedPlan(value) {
   const renumberedItinerary = renumberItineraryDays(normalizedItinerary);
 
   const normalizedWeather = {};
-  const rawWeather = value.weather && typeof value.weather === 'object' ? value.weather : {};
-  for (const day of Object.keys(renumberedItinerary)) {
-    normalizedWeather[day] = String(rawWeather[day] || '').trim();
+  const rawWeather = value.weather && typeof value.weather === 'object' && !Array.isArray(value.weather) ? value.weather : {};
+  Object.keys(normalizedItinerary).forEach((originalDay, index) => {
+    normalizedWeather[`Day ${index + 1}`] = typeof rawWeather[originalDay] === 'string' ? rawWeather[originalDay].trim() : '';
+  });
+
+  const destination = String(value.destination || '').trim();
+  const startDate = String(value.start_date || '');
+  const rawContext = value.weather_context;
+  let weatherContext = null;
+  if (rawContext && typeof rawContext === 'object' && !Array.isArray(rawContext)) {
+    const matchesTrip = String(rawContext.destination || '').trim() === destination && rawContext.start_date === startDate;
+    if (matchesTrip) {
+      weatherContext = { destination, start_date: startDate };
+      if (Number.isInteger(rawContext.days) && rawContext.days > 0) weatherContext.days = rawContext.days;
+      if (typeof rawContext.location_label === 'string') weatherContext.location_label = rawContext.location_label.trim();
+      if (typeof rawContext.updated_at === 'string' && Number.isFinite(Date.parse(rawContext.updated_at))) {
+        weatherContext.updated_at = new Date(rawContext.updated_at).toISOString();
+      }
+    } else {
+      for (const day of Object.keys(normalizedWeather)) normalizedWeather[day] = '';
+    }
   }
 
   return {
-    destination: String(value.destination || ''),
-    start_date: String(value.start_date || ''),
+    destination,
+    start_date: startDate,
     total_budget_estimate: getBudgetRange(normalizedItinerary),
     recommended_transport: String(value.recommended_transport || '待推荐'),
     weather: normalizedWeather,
-    weather_context: value.weather_context && typeof value.weather_context === 'object'
-      ? value.weather_context
-      : null,
+    weather_context: weatherContext,
     itinerary: renumberedItinerary,
   };
 }

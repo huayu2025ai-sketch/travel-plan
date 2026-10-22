@@ -1,4 +1,5 @@
 import { getDayDateInfo } from './date.js';
+import { getPlanWeather } from './plan-weather.js';
 import { PLAN_SITE_QR_ROWS } from '../content/site-qr.js';
 
 const WIDTH = 900;
@@ -130,7 +131,11 @@ function measurePoster(ctx, plan) {
 
   const days = entries.map(([day, items], dayIndex) => {
     const top = y;
-    y += layout.contentTop;
+    const weather = getPlanWeather(plan, day);
+    font(ctx, layout.cardWidth < 820 ? 20 : 23);
+    const weatherLines = weather ? wrapText(ctx, `天气：${weather}`, layout.cardWidth - 32) : [];
+    const weatherHeight = weatherLines.length ? weatherLines.length * 28 + 8 : 0;
+    y += layout.contentTop + weatherHeight;
     const rows = (items || []).map((item) => {
       const reservation = needsReservation(item);
       font(ctx, layout.titleSize, 800);
@@ -151,7 +156,7 @@ function measurePoster(ctx, plan) {
     y += 4;
     const height = y - top;
     y += 16;
-    return { label: `DAY ${dayIndex + 1}`, date: dayDate(plan, day), top, height, rows, layout, color: dayIndex % 2 ? GREEN : RED };
+    return { label: `DAY ${dayIndex + 1}`, date: dayDate(plan, day), top, height, rows, layout, weatherLines, weatherHeight, color: dayIndex % 2 ? GREEN : RED };
   });
 
   // Read down the left column first, then the right; keep the day counts balanced.
@@ -256,10 +261,14 @@ function drawDay(ctx, day) {
   font(ctx, layout.dateSize, 800, SERIF);
   ctx.fillText(day.date, layout.dateX, top + layout.headerHeight - 17);
 
+  ctx.fillStyle = GREEN;
+  font(ctx, layout.cardWidth < 820 ? 20 : 23);
+  drawLines(ctx, day.weatherLines, 56, top + layout.headerHeight + 26, 28);
+
   if (!day.rows.length) {
     ctx.fillStyle = '#8b9187';
     font(ctx, layout.cardWidth < 820 ? 22 : 25);
-    ctx.fillText('自由安排 · 暂无行程', layout.textX, top + 120);
+    ctx.fillText('自由安排 · 暂无行程', layout.textX, top + 120 + day.weatherHeight);
   }
   day.rows.forEach((row, index) => {
     const { item, y } = row;

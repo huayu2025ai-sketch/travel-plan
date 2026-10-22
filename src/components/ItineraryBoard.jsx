@@ -2,12 +2,14 @@ import React from 'react';
 import { DragDropContext, Draggable, Droppable } from '@hello-pangea/dnd';
 import { Check, ChevronDown, FileUp, Plus, SlidersHorizontal, X } from 'lucide-react';
 import { DayColumn } from './ItineraryComponents.jsx';
+import { WeatherControls } from './WeatherControls.jsx';
 import { PlanExportMenu } from './PlanExportMenu.jsx';
 import { getDayDateInfo } from '../utils/date.js';
 import { getPlanWeather } from '../utils/plan-weather.js';
 import { getTypeBadgeClass, typeAccent, typeOptions } from '../utils/plan.js';
 
 export function ItineraryBoard({
+  weatherControls,
   isBoardCollapsed,
   setIsBoardCollapsed,
   addDay,
@@ -53,8 +55,8 @@ export function ItineraryBoard({
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3 px-1">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-stone-400 ">Kanban Board</p>
-          <div className="mt-1 flex items-center gap-2">
-            <h2 className="text-lg font-bold text-stone-950 ">每日行程看板</h2>
+          <div className="mt-1 flex flex-wrap items-center gap-2">
+            <h2 className="shrink-0 text-lg font-bold text-stone-950 ">每日行程看板</h2>
             <button
               type="button"
               onClick={() => setIsBoardCollapsed((isCollapsed) => !isCollapsed)}
@@ -65,6 +67,7 @@ export function ItineraryBoard({
             >
               <ChevronDown className={`h-3.5 w-3.5 transition ${isBoardCollapsed ? '-rotate-90' : ''}`} />
             </button>
+            <WeatherControls plan={plan} {...weatherControls} />
           </div>
         </div>
         <div className="travel-board-actions flex flex-wrap items-center gap-2">

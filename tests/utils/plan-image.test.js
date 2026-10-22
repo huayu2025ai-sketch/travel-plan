@@ -45,6 +45,31 @@ describe('itinerary poster export', () => {
     expect(canvas.toBlob.mock.calls[0][1]).toBe('image/png');
   });
 
+  it.each([2, 4])('includes wrapped weather without overlapping dates or itinerary in a %i-day image', async (count) => {
+    const itinerary = Object.fromEntries(Array.from({ length: count }, (_, i) => [`Day ${i + 1}`, i === 1 ? [] : [stop()]]));
+    const weather = Object.fromEntries(Object.keys(itinerary).map((day) => [day, '晴转多云 15-22°C，东南风3级，午后可能出现阵雨，请带雨具。']));
+    await buildPlanImageBlob({ ...plan(itinerary), weather, weather_context: { destination: '洛阳', start_date: '2026-10-30' } });
+    expect(texts().filter((text) => text.startsWith('天气：'))).toHaveLength(count);
+    expect(texts().join('')).toContain('请带雨具。');
+    for (const heading of drawn.filter(({ text }) => /^DAY /.test(text))) {
+      const weather = drawn.find((text) => text.text.startsWith('天气：') && text.x >= heading.x - 40 && text.x < heading.x + 100 && text.y > heading.y);
+      expect(weather.y).toBeGreaterThan(heading.y + 20);
+      const itinerary = drawn.find((text) => text.text === '龙门石窟' && text.y > weather.y && text.x >= heading.x && text.x < heading.x + 400);
+      if (itinerary) expect(itinerary.y).toBeGreaterThan(weather.y + 28);
+    }
+    for (const text of drawn) {
+      const right = text.align === 'center' ? text.x + text.width / 2 : text.x + text.width;
+      expect(right).toBeLessThanOrEqual(860);
+      expect(text.y).toBeLessThan(canvas.height / (canvas.width / 900));
+    }
+  });
+
+  it('does not export weather that belongs to a different date', async () => {
+    await buildPlanImageBlob({ ...plan({ 'Day 1': [] }), weather: { 'Day 1': '旧预报' }, weather_context: { destination: '洛阳', start_date: '2026-10-29' } });
+    expect(texts().join('')).not.toContain('旧预报');
+    expect(texts().join('')).not.toContain('天气：');
+  });
+
   it('wraps long titles and full notes inside the image and increases its height', async () => {
     await buildPlanImageBlob(plan({ 'Day 1': [stop()] }));
     const shortHeight = canvas.height;
